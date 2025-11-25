@@ -7,6 +7,8 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -14,12 +16,17 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
-import { User } from '../database/entities/users.entity';
+import { User, UserRole } from '../database/entities/users.entity';
 import { TokenResponseDto } from './dto/token-response.dto';
+import { UserSubscription, SubscriptionStatus } from '../database/entities/user-subscriptions.entity';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    @InjectRepository(UserSubscription)
+    private readonly userSubscriptionRepository: Repository<UserSubscription>,
+  ) {}
 
   @Public()
   @Post('register')
@@ -56,9 +63,29 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  async getProfile(@CurrentUser() user: User): Promise<Partial<User>> {
+  async getProfile(@CurrentUser() user: User): Promise<Partial<User> & { subscription?: UserSubscription }> {
     // Retornar datos del usuario sin información sensible
     const { passwordHash, refreshTokenHash, ...userProfile } = user;
+    
+    // Si el usuario es cliente, incluir su suscripción activa
+    if (user.role === UserRole.CUSTOMER) {
+      const subscription = await this.userSubscriptionRepository.findOne({
+        where: {
+          user: { id: user.id },
+          status: SubscriptionStatus.ACTIVE,
+        },
+        relations: ['plan', 'billingCycle'],
+        order: {
+          createdAt: 'DESC', // Obtener la más reciente
+        },
+      });
+      
+      return {
+        ...userProfile,
+        subscription: subscription || undefined,
+      };
+    }
+    
     return userProfile;
   }
 }
