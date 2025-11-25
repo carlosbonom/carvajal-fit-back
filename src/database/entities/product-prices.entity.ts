@@ -40,3 +40,4 @@ export class ProductPrice {
   updatedAt: Date;
 }
 
+

@@ -43,3 +43,4 @@ export class UserProductPurchase {
   lastDownloadAt: Date;
 }
 
+
