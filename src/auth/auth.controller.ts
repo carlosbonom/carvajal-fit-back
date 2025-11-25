@@ -63,7 +63,7 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  async getProfile(@CurrentUser() user: User): Promise<Partial<User> & { subscription?: UserSubscription }> {
+  async getProfile(@CurrentUser() user: User): Promise<Partial<User> & { subscription?: UserSubscription | null }> {
     // Retornar datos del usuario sin información sensible
     const { passwordHash, refreshTokenHash, ...userProfile } = user;
     
@@ -82,7 +82,7 @@ export class AuthController {
       
       return {
         ...userProfile,
-        subscription: subscription || undefined,
+        subscription: subscription || null,
       };
     }
     
