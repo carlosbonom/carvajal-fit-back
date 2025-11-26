@@ -75,6 +75,12 @@ export class UserSubscription {
   @Column({ type: 'text', nullable: true, name: 'cancellation_reason' })
   cancellationReason: string;
 
+  @Column({ type: 'varchar', length: 255, nullable: true, name: 'mercado_pago_subscription_id' })
+  mercadoPagoSubscriptionId: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  metadata: Record<string, any>;
+
   @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
   createdAt: Date;
 
