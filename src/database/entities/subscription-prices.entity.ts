@@ -27,7 +27,7 @@ export class SubscriptionPrice {
   @JoinColumn({ name: 'billing_cycle_id' })
   billingCycle: BillingCycle;
 
-  @Column({ type: 'char', nullable: false })
+  @Column({ type: 'char', length: 3, nullable: false })
   currency: string;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: false })

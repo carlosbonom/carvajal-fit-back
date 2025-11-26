@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { TypeOrmConfigService } from './database/typeorm/typeorm.service';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { UsersModule } from './users/users.module';
     }),
     AuthModule,
     UsersModule,
+    SubscriptionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
