@@ -54,16 +54,17 @@ export class MercadoPagoService {
       const frequencyType = this.mapIntervalTypeToFrequencyType(data.intervalType);
       console.log(`IntervalType: ${data.intervalType} -> FrequencyType: ${frequencyType}`);
       
-      // Calcular fecha de inicio (mañana a las 00:00:00 UTC para asegurar que sea válida)
-      // Mercado Pago PreApproval API requiere formato ISO 8601 completo: YYYY-MM-DDTHH:MM:SSZ
-      const startDate = new Date();
-      startDate.setUTCDate(startDate.getUTCDate() + 1); // Al menos un día en el futuro
+      // Calcular fecha de inicio
+      // Mercado Pago requiere que la fecha esté en el futuro pero no muy lejana
+      // Usar la fecha actual + 1 día a las 00:00:00 UTC
+      const now = new Date();
+      const startDate = new Date(now);
+      startDate.setUTCDate(startDate.getUTCDate() + 1); // Mañana
       startDate.setUTCHours(0, 0, 0, 0);
       
-      // Formatear fecha en formato ISO 8601 sin milisegundos: YYYY-MM-DDTHH:MM:SSZ
-      // Mercado Pago puede requerir el formato sin milisegundos
-      const isoString = startDate.toISOString();
-      const formattedStartDate = isoString.replace(/\.\d{3}Z$/, 'Z');
+      // Formatear fecha en formato ISO 8601 completo: YYYY-MM-DDTHH:MM:SS.sssZ
+      // Mercado Pago PreApproval requiere este formato exacto con milisegundos
+      const formattedStartDate = startDate.toISOString();
       console.log(`Fecha de inicio calculada: ${formattedStartDate}`);
       
       // Ajustar frecuencia para semanas y años
