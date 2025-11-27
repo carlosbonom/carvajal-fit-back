@@ -1,6 +1,5 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { MercadoPagoConfig, PreApproval, Payment } from 'mercadopago';
 
 export interface CreateSubscriptionData {
   planId: string;
@@ -22,9 +21,8 @@ export interface CreateSubscriptionData {
 
 @Injectable()
 export class MercadoPagoService {
-  private client: MercadoPagoConfig;
-  private preApproval: PreApproval;
-  private payment: Payment;
+  private accessToken: string;
+  private baseUrl: string;
 
   constructor(private configService: ConfigService) {
     const accessToken = this.configService.get<string>('MERCADOPAGO_ACCESS_TOKEN');
@@ -33,20 +31,15 @@ export class MercadoPagoService {
       throw new Error('MERCADOPAGO_ACCESS_TOKEN no está configurado en las variables de entorno');
     }
 
+    this.accessToken = accessToken;
+
     // Detectar si es sandbox (los tokens de sandbox suelen empezar con "TEST-")
     const isSandbox = accessToken.startsWith('TEST-');
+    // URL base de la API de Mercado Pago
+    this.baseUrl = 'https://api.mercadopago.com';
+    
     console.log(`🔧 Ambiente Mercado Pago: ${isSandbox ? 'SANDBOX (Pruebas)' : 'PRODUCCIÓN'}`);
-
-    this.client = new MercadoPagoConfig({
-      accessToken: accessToken,
-      options: {
-        timeout: 10000, // Aumentar timeout a 10 segundos
-        // idempotencyKey se genera automáticamente por el SDK si no se especifica
-      },
-    });
-
-    this.preApproval = new PreApproval(this.client);
-    this.payment = new Payment(this.client);
+    console.log(`🔗 URL Base: ${this.baseUrl}`);
   }
 
   async createSubscription(data: CreateSubscriptionData) {
@@ -153,18 +146,60 @@ export class MercadoPagoService {
       console.log('=======================================');
 
       console.log('Enviando solicitud a Mercado Pago...');
-      const response = await this.preApproval.create({ body: subscriptionData });
-      console.log('Respuesta recibida de Mercado Pago:', JSON.stringify(response, null, 2));
+      
+      // Llamar directamente a la API REST de Mercado Pago
+      const apiUrl = `${this.baseUrl}/preapproval`;
+      console.log(`URL: ${apiUrl}`);
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.accessToken}`,
+          'X-Idempotency-Key': data.externalReference, // Usar external_reference como idempotency key
+        },
+        body: JSON.stringify(subscriptionData),
+      });
+
+      const responseText = await response.text();
+      console.log(`Status Code: ${response.status}`);
+      console.log(`Response Headers:`, Object.fromEntries(response.headers.entries()));
+      console.log(`Response Body: ${responseText}`);
+
+      if (!response.ok) {
+        let errorData: any;
+        try {
+          errorData = JSON.parse(responseText);
+        } catch (e) {
+          errorData = { message: responseText, status: response.status };
+        }
+        
+        console.error('Error de Mercado Pago:', errorData);
+        throw {
+          message: errorData.message || `Error HTTP ${response.status}`,
+          status: response.status,
+          statusText: response.statusText,
+          data: errorData,
+          response: {
+            status: response.status,
+            statusText: response.statusText,
+            data: errorData,
+          },
+        };
+      }
+
+      const responseData = JSON.parse(responseText);
+      console.log('Respuesta recibida de Mercado Pago:', JSON.stringify(responseData, null, 2));
 
       return {
-        id: response.id,
-        status: response.status,
-        initPoint: response.init_point,
-        sandboxInitPoint: (response as any).sandbox_init_point || null,
-        externalReference: response.external_reference,
-        payerEmail: response.payer_email,
-        reason: response.reason,
-        autoRecurring: response.auto_recurring,
+        id: responseData.id,
+        status: responseData.status,
+        initPoint: responseData.init_point || responseData.sandbox_init_point || null,
+        sandboxInitPoint: responseData.sandbox_init_point || null,
+        externalReference: responseData.external_reference,
+        payerEmail: responseData.payer_email,
+        reason: responseData.reason,
+        autoRecurring: responseData.auto_recurring,
       };
     } catch (error: any) {
       console.error('=== ERROR AL CREAR SUSCRIPCIÓN EN MERCADO PAGO ===');
@@ -265,41 +300,106 @@ export class MercadoPagoService {
 
   async getSubscription(subscriptionId: string) {
     try {
-      const response = await this.preApproval.get({ id: subscriptionId });
-      return response;
-    } catch (error) {
+      const apiUrl = `${this.baseUrl}/preapproval/${subscriptionId}`;
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData: any;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { message: errorText };
+        }
+        throw {
+          message: errorData.message || `Error HTTP ${response.status}`,
+          status: response.status,
+          data: errorData,
+        };
+      }
+
+      return await response.json();
+    } catch (error: any) {
       console.error('Error obteniendo suscripción de Mercado Pago:', error);
       throw new BadRequestException(
-        `Error al obtener la suscripción de Mercado Pago: ${error.message}`,
+        `Error al obtener la suscripción de Mercado Pago: ${error.message || 'Error desconocido'}`,
       );
     }
   }
 
   async cancelSubscription(subscriptionId: string) {
     try {
-      const response = await this.preApproval.update({
-        id: subscriptionId,
-        body: {
-          status: 'cancelled',
+      const apiUrl = `${this.baseUrl}/preapproval/${subscriptionId}`;
+      const response = await fetch(apiUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.accessToken}`,
         },
+        body: JSON.stringify({
+          status: 'cancelled',
+        }),
       });
-      return response;
-    } catch (error) {
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData: any;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { message: errorText };
+        }
+        throw {
+          message: errorData.message || `Error HTTP ${response.status}`,
+          status: response.status,
+          data: errorData,
+        };
+      }
+
+      return await response.json();
+    } catch (error: any) {
       console.error('Error cancelando suscripción en Mercado Pago:', error);
       throw new BadRequestException(
-        `Error al cancelar la suscripción en Mercado Pago: ${error.message}`,
+        `Error al cancelar la suscripción de Mercado Pago: ${error.message || 'Error desconocido'}`,
       );
     }
   }
 
   async getPayment(paymentId: string) {
     try {
-      const response = await this.payment.get({ id: paymentId });
-      return response;
-    } catch (error) {
+      const apiUrl = `${this.baseUrl}/v1/payments/${paymentId}`;
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData: any;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { message: errorText };
+        }
+        throw {
+          message: errorData.message || `Error HTTP ${response.status}`,
+          status: response.status,
+          data: errorData,
+        };
+      }
+
+      return await response.json();
+    } catch (error: any) {
       console.error('Error obteniendo pago de Mercado Pago:', error);
       throw new BadRequestException(
-        `Error al obtener el pago de Mercado Pago: ${error.message}`,
+        `Error al obtener el pago de Mercado Pago: ${error.message || 'Error desconocido'}`,
       );
     }
   }
