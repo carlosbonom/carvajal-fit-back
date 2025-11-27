@@ -33,11 +33,15 @@ export class MercadoPagoService {
       throw new Error('MERCADOPAGO_ACCESS_TOKEN no está configurado en las variables de entorno');
     }
 
+    // Detectar si es sandbox (los tokens de sandbox suelen empezar con "TEST-")
+    const isSandbox = accessToken.startsWith('TEST-');
+    console.log(`🔧 Ambiente Mercado Pago: ${isSandbox ? 'SANDBOX (Pruebas)' : 'PRODUCCIÓN'}`);
+
     this.client = new MercadoPagoConfig({
       accessToken: accessToken,
       options: {
-        timeout: 5000,
-        idempotencyKey: 'abc',
+        timeout: 10000, // Aumentar timeout a 10 segundos
+        // idempotencyKey se genera automáticamente por el SDK si no se especifica
       },
     });
 
@@ -57,10 +61,19 @@ export class MercadoPagoService {
       // Calcular fecha de inicio
       // Mercado Pago requiere que la fecha esté en el futuro pero no muy lejana
       // Usar la fecha actual + 1 día a las 00:00:00 UTC
+      // Nota: Asegurar que la fecha no esté más de 1 año en el futuro
       const now = new Date();
       const startDate = new Date(now);
       startDate.setUTCDate(startDate.getUTCDate() + 1); // Mañana
       startDate.setUTCHours(0, 0, 0, 0);
+      
+      // Verificar que la fecha no esté más de 1 año en el futuro
+      const oneYearFromNow = new Date(now);
+      oneYearFromNow.setUTCFullYear(oneYearFromNow.getUTCFullYear() + 1);
+      if (startDate > oneYearFromNow) {
+        startDate.setTime(oneYearFromNow.getTime());
+        startDate.setUTCHours(0, 0, 0, 0);
+      }
       
       // Formatear fecha en formato ISO 8601 completo: YYYY-MM-DDTHH:MM:SS.sssZ
       // Mercado Pago PreApproval requiere este formato exacto con milisegundos
@@ -82,8 +95,10 @@ export class MercadoPagoService {
       }
       
       // Asegurar que el monto sea un número decimal (no entero)
-      // Mercado Pago puede requerir que sea un float explícito
-      const transactionAmount = parseFloat(data.amount.toFixed(2));
+      // Mercado Pago requiere que sea un número decimal explícito
+      // Para CLP, aunque no tenga decimales, debe ser un número decimal
+      const transactionAmount = parseFloat(Number(data.amount).toFixed(2));
+      console.log(`Monto formateado: ${transactionAmount} (tipo: ${typeof transactionAmount})`);
 
       // Validar que la frecuencia sea válida
       if (!adjustedFrequency || adjustedFrequency <= 0) {
@@ -131,7 +146,9 @@ export class MercadoPagoService {
       }
 
       // Log del payload para debugging
+      const isSandbox = this.configService.get<string>('MERCADOPAGO_ACCESS_TOKEN')?.startsWith('TEST-');
       console.log('=== PAYLOAD ENVIADO A MERCADO PAGO ===');
+      console.log(`Ambiente: ${isSandbox ? 'SANDBOX' : 'PRODUCCIÓN'}`);
       console.log(JSON.stringify(subscriptionData, null, 2));
       console.log('=======================================');
 
