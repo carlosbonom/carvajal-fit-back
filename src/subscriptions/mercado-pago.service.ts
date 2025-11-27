@@ -50,8 +50,10 @@ export class MercadoPagoService {
       // Mapear intervalType a frequency_type de Mercado Pago
       const frequencyType = this.mapIntervalTypeToFrequencyType(data.intervalType);
       
-      // Calcular fecha de inicio (hoy)
+      // Calcular fecha de inicio (mañana a las 00:00:00 para asegurar que sea válida)
+      // Mercado Pago requiere que la fecha esté en formato ISO 8601 completo
       const startDate = new Date();
+      startDate.setDate(startDate.getDate() + 1); // Al menos un día en el futuro
       startDate.setHours(0, 0, 0, 0);
       
       // Calcular fecha de fin (opcional, puedes dejarlo null para suscripción indefinida)
@@ -74,16 +76,16 @@ export class MercadoPagoService {
         auto_recurring: {
           frequency: adjustedFrequency,
           frequency_type: frequencyType,
-          start_date: startDate.toISOString().split('T')[0], // Formato YYYY-MM-DD
+          start_date: startDate.toISOString(), // Formato ISO 8601 completo: YYYY-MM-DDTHH:MM:SS.sssZ
           transaction_amount: data.amount,
           currency_id: data.currency,
         },
         back_url: data.backUrl || `${this.configService.get<string>('APP_URL', 'http://localhost:3000')}/subscriptions/callback`,
       };
 
-      // Si hay fecha de fin, agregarla
+      // Si hay fecha de fin, agregarla en formato ISO 8601
       if (endDate) {
-        subscriptionData.auto_recurring.end_date = endDate;
+        subscriptionData.auto_recurring.end_date = endDate instanceof Date ? endDate.toISOString() : endDate;
       }
 
       // Agregar información del pagador si está disponible
