@@ -52,26 +52,20 @@ export class MercadoPagoService {
       console.log(`IntervalType: ${data.intervalType} -> FrequencyType: ${frequencyType}`);
       
       // Calcular fecha de inicio
-      // Mercado Pago requiere que la fecha esté en el futuro pero no muy lejana
+      // Mercado Pago requiere que la fecha esté en el futuro
+      // Para suscripciones, generalmente se usa la fecha actual + 1 día o más
       // Usar la fecha actual + 1 día a las 00:00:00 UTC
-      // Nota: Asegurar que la fecha no esté más de 1 año en el futuro
       const now = new Date();
       const startDate = new Date(now);
       startDate.setUTCDate(startDate.getUTCDate() + 1); // Mañana
       startDate.setUTCHours(0, 0, 0, 0);
       
-      // Verificar que la fecha no esté más de 1 año en el futuro
-      const oneYearFromNow = new Date(now);
-      oneYearFromNow.setUTCFullYear(oneYearFromNow.getUTCFullYear() + 1);
-      if (startDate > oneYearFromNow) {
-        startDate.setTime(oneYearFromNow.getTime());
-        startDate.setUTCHours(0, 0, 0, 0);
-      }
-      
       // Formatear fecha en formato ISO 8601 completo: YYYY-MM-DDTHH:MM:SS.sssZ
       // Mercado Pago PreApproval requiere este formato exacto con milisegundos
       const formattedStartDate = startDate.toISOString();
       console.log(`Fecha de inicio calculada: ${formattedStartDate}`);
+      console.log(`Fecha actual: ${now.toISOString()}`);
+      console.log(`Diferencia en días: ${Math.ceil((startDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))}`);
       
       // Ajustar frecuencia para semanas y años
       let adjustedFrequency = data.intervalCount;
@@ -87,11 +81,15 @@ export class MercadoPagoService {
         throw new BadRequestException('El monto debe ser un número positivo válido');
       }
       
-      // Asegurar que el monto sea un número decimal (no entero)
-      // Mercado Pago requiere que sea un número decimal explícito
-      // Para CLP, aunque no tenga decimales, debe ser un número decimal
-      const transactionAmount = parseFloat(Number(data.amount).toFixed(2));
+      // Asegurar que el monto sea un número decimal válido
+      // Mercado Pago requiere que sea un número (puede ser entero o decimal)
+      const transactionAmount = Number(data.amount);
       console.log(`Monto formateado: ${transactionAmount} (tipo: ${typeof transactionAmount})`);
+      
+      // Validar que el monto no sea 0
+      if (transactionAmount === 0 || isNaN(transactionAmount)) {
+        throw new BadRequestException('El monto debe ser un número válido mayor a cero');
+      }
 
       // Validar que la frecuencia sea válida
       if (!adjustedFrequency || adjustedFrequency <= 0) {
@@ -191,17 +189,36 @@ export class MercadoPagoService {
       if (!response.ok) {
         let errorData: any;
         try {
-          errorData = JSON.parse(responseText);
+          errorData = responseText ? JSON.parse(responseText) : {};
         } catch (e) {
-          errorData = { message: responseText, status: response.status };
+          errorData = { message: responseText || 'Sin detalles del error', status: response.status };
+        }
+        
+        // Mensajes específicos según el código de estado
+        let errorMessage = errorData.message || `Error HTTP ${response.status}`;
+        
+        if (response.status === 503) {
+          errorMessage = 'Servicio de Mercado Pago temporalmente no disponible. Por favor, intenta nuevamente en unos momentos.';
+          console.error('⚠️ Error 503: Servicio de Mercado Pago no disponible temporalmente');
+          console.error('💡 Sugerencia: Espera unos minutos y vuelve a intentar');
+        } else if (response.status === 500) {
+          errorMessage = 'Error interno del servidor de Mercado Pago. Por favor, intenta nuevamente.';
+          console.error('⚠️ Error 500: Error interno del servidor de Mercado Pago');
+        } else if (response.status === 400) {
+          errorMessage = errorData.message || 'Error en la solicitud. Verifica los datos enviados.';
+          console.error('⚠️ Error 400: Error en la solicitud');
+          console.error('Detalles:', errorData);
         }
         
         console.error('Error de Mercado Pago:', errorData);
+        console.error('X-Request-ID:', response.headers.get('x-request-id') || 'No disponible');
+        
         throw {
-          message: errorData.message || `Error HTTP ${response.status}`,
+          message: errorMessage,
           status: response.status,
           statusText: response.statusText,
           data: errorData,
+          requestId: response.headers.get('x-request-id'),
           response: {
             status: response.status,
             statusText: response.statusText,
