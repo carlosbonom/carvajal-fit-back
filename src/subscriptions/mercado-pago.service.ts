@@ -58,13 +58,19 @@ export class MercadoPagoService {
       // Usar la fecha actual + 1 día a las 00:00:00 UTC
       const now = new Date();
       const startDate = new Date(now);
-      startDate.setUTCDate(startDate.getUTCDate() + 1); // Mañana
+      startDate.setUTCDate(startDate.getUTCDate() ); // Mañana
       startDate.setUTCHours(0, 0, 0, 0);
       
-      // Formatear fecha en formato ISO 8601 completo: YYYY-MM-DDTHH:MM:SS.sssZ
+      // Calcular fecha de fin (1 año desde la fecha de inicio)
+      const endDate = new Date(startDate);
+      endDate.setUTCFullYear(endDate.getUTCFullYear() + 5);
+      
+      // Formatear fechas en formato ISO 8601 completo: YYYY-MM-DDTHH:MM:SS.sssZ
       // Mercado Pago PreApproval requiere este formato exacto con milisegundos
       const formattedStartDate = startDate.toISOString();
+      const formattedEndDate = endDate.toISOString();
       console.log(`Fecha de inicio calculada: ${formattedStartDate}`);
+      console.log(`Fecha de fin calculada: ${formattedEndDate}`);
       console.log(`Fecha actual: ${now.toISOString()}`);
       console.log(`Diferencia en días: ${Math.ceil((startDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))}`);
       
@@ -98,6 +104,7 @@ export class MercadoPagoService {
       }
 
       // Construir el objeto de suscripción según la API de Mercado Pago
+      // Usando exactamente los mismos campos que el curl de ejemplo
       const subscriptionData: any = {
         reason: data.planName,
         external_reference: data.externalReference,
@@ -106,18 +113,12 @@ export class MercadoPagoService {
           frequency: adjustedFrequency,
           frequency_type: frequencyType,
           start_date: formattedStartDate,
+          end_date: formattedEndDate,
           transaction_amount: transactionAmount,
           currency_id: data.currency,
         },
         back_url: data.backUrl || `${this.configService.get<string>('APP_URL', 'http://localhost:3000')}/subscriptions/callback`,
       };
-
-      // Nota: end_date no se incluye para suscripciones indefinidas
-      // Si en el futuro se necesita una fecha de fin, se puede agregar aquí:
-      // const endDate: Date | null = null;
-      // if (endDate) {
-      //   subscriptionData.auto_recurring.end_date = endDate.toISOString();
-      // }
 
       // Si hay card_token_id, es una suscripción con pago autorizado
       // De lo contrario, es una suscripción con pago pendiente
@@ -129,24 +130,6 @@ export class MercadoPagoService {
         // Para suscripciones con pago pendiente, el status debe ser "pending"
         subscriptionData.status = 'pending';
         console.log('⚠️ Creando suscripción con pago PENDIENTE (status: pending)');
-      }
-
-      // Agregar información del pagador si está disponible
-      if (data.payerFirstName || data.payerLastName) {
-        subscriptionData['payer'] = {
-          name: data.payerFirstName,
-          surname: data.payerLastName,
-        };
-      }
-
-      if (data.payerIdentificationType && data.payerIdentificationNumber) {
-        if (!subscriptionData['payer']) {
-          subscriptionData['payer'] = {};
-        }
-        subscriptionData['payer']['identification'] = {
-          type: data.payerIdentificationType,
-          number: data.payerIdentificationNumber,
-        };
       }
 
       // Log del payload para debugging
