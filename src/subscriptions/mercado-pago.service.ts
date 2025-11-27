@@ -118,10 +118,10 @@ export class MercadoPagoService {
         };
       }
 
-      // Log del payload para debugging (solo en desarrollo)
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('Payload enviado a Mercado Pago:', JSON.stringify(subscriptionData, null, 2));
-      }
+      // Log del payload para debugging
+      console.log('=== PAYLOAD ENVIADO A MERCADO PAGO ===');
+      console.log(JSON.stringify(subscriptionData, null, 2));
+      console.log('=======================================');
 
       const response = await this.preApproval.create({ body: subscriptionData });
 
