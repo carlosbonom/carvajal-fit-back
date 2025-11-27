@@ -125,7 +125,9 @@ export class MercadoPagoService {
         subscriptionData.status = 'authorized';
         console.log('⚠️ Creando suscripción con pago AUTORIZADO (card_token_id proporcionado)');
       } else {
-        console.log('⚠️ Creando suscripción con pago PENDIENTE (sin card_token_id)');
+        // Para suscripciones con pago pendiente, el status debe ser "pending"
+        subscriptionData.status = 'pending';
+        console.log('⚠️ Creando suscripción con pago PENDIENTE (status: pending)');
       }
 
       // Agregar información del pagador si está disponible
