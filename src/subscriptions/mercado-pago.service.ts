@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import axios, { AxiosError } from 'axios';
 
 export interface CreateSubscriptionData {
   planId: string;
@@ -157,7 +158,7 @@ export class MercadoPagoService {
 
       console.log('Enviando solicitud a Mercado Pago...');
       
-      // Llamar directamente a la API REST de Mercado Pago
+      // Llamar directamente a la API REST de Mercado Pago usando axios
       const apiUrl = `${this.baseUrl}/preapproval`;
       console.log(`URL: ${apiUrl}`);
       
@@ -177,71 +178,96 @@ export class MercadoPagoService {
       
       console.log('Headers:', JSON.stringify(headers, null, 2));
       
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(subscriptionData),
-      });
+      try {
+        const response = await axios.post(apiUrl, subscriptionData, {
+          headers,
+          validateStatus: () => true, // No lanzar error automáticamente para cualquier status
+        });
 
-      const responseText = await response.text();
-      console.log(`Status Code: ${response.status}`);
-      console.log(`Response Headers:`, Object.fromEntries(response.headers.entries()));
-      console.log(`Response Body: ${responseText}`);
+        console.log(`Status Code: ${response.status}`);
+        console.log(`Response Headers:`, response.headers);
+        console.log(`Response Body:`, JSON.stringify(response.data, null, 2));
 
-      if (!response.ok) {
-        let errorData: any;
-        try {
-          errorData = responseText ? JSON.parse(responseText) : {};
-        } catch (e) {
-          errorData = { message: responseText || 'Sin detalles del error', status: response.status };
-        }
-        
-        // Mensajes específicos según el código de estado
-        let errorMessage = errorData.message || `Error HTTP ${response.status}`;
-        
-        if (response.status === 503) {
-          errorMessage = 'Servicio de Mercado Pago temporalmente no disponible. Por favor, intenta nuevamente en unos momentos.';
-          console.error('⚠️ Error 503: Servicio de Mercado Pago no disponible temporalmente');
-          console.error('💡 Sugerencia: Espera unos minutos y vuelve a intentar');
-        } else if (response.status === 500) {
-          errorMessage = 'Error interno del servidor de Mercado Pago. Por favor, intenta nuevamente.';
-          console.error('⚠️ Error 500: Error interno del servidor de Mercado Pago');
-        } else if (response.status === 400) {
-          errorMessage = errorData.message || 'Error en la solicitud. Verifica los datos enviados.';
-          console.error('⚠️ Error 400: Error en la solicitud');
-          console.error('Detalles:', errorData);
-        }
-        
-        console.error('Error de Mercado Pago:', errorData);
-        console.error('X-Request-ID:', response.headers.get('x-request-id') || 'No disponible');
-        
-        throw {
-          message: errorMessage,
-          status: response.status,
-          statusText: response.statusText,
-          data: errorData,
-          requestId: response.headers.get('x-request-id'),
-          response: {
+        if (response.status < 200 || response.status >= 300) {
+          const errorData = response.data || { message: 'Sin detalles del error', status: response.status };
+          
+          // Mensajes específicos según el código de estado
+          let errorMessage = errorData.message || `Error HTTP ${response.status}`;
+          
+          if (response.status === 503) {
+            errorMessage = 'Servicio de Mercado Pago temporalmente no disponible. Por favor, intenta nuevamente en unos momentos.';
+            console.error('⚠️ Error 503: Servicio de Mercado Pago no disponible temporalmente');
+            console.error('💡 Sugerencia: Espera unos minutos y vuelve a intentar');
+          } else if (response.status === 500) {
+            errorMessage = 'Error interno del servidor de Mercado Pago. Por favor, intenta nuevamente.';
+            console.error('⚠️ Error 500: Error interno del servidor de Mercado Pago');
+          } else if (response.status === 400) {
+            errorMessage = errorData.message || 'Error en la solicitud. Verifica los datos enviados.';
+            console.error('⚠️ Error 400: Error en la solicitud');
+            console.error('Detalles:', errorData);
+          }
+          
+          console.error('Error de Mercado Pago:', errorData);
+          console.error('X-Request-ID:', response.headers['x-request-id'] || 'No disponible');
+          
+          throw {
+            message: errorMessage,
             status: response.status,
             statusText: response.statusText,
             data: errorData,
-          },
+            requestId: response.headers['x-request-id'],
+            response: {
+              status: response.status,
+              statusText: response.statusText,
+              data: errorData,
+            },
+          };
+        }
+
+        const responseData = response.data;
+        console.log('Respuesta recibida de Mercado Pago:', JSON.stringify(responseData, null, 2));
+
+        return {
+          id: responseData.id,
+          status: responseData.status,
+          initPoint: responseData.init_point || responseData.sandbox_init_point || null,
+          sandboxInitPoint: responseData.sandbox_init_point || null,
+          externalReference: responseData.external_reference,
+          payerEmail: responseData.payer_email,
+          reason: responseData.reason,
+          autoRecurring: responseData.auto_recurring,
         };
+      } catch (axiosError: any) {
+        // Si es un error de axios, extraer la información
+        if (axios.isAxiosError(axiosError)) {
+          const error = axiosError as AxiosError;
+          if (error.response) {
+            // El servidor respondió con un código de estado fuera del rango 2xx
+            const errorData = error.response.data || { message: 'Error desconocido' };
+            throw {
+              message: (errorData as any).message || `Error HTTP ${error.response.status}`,
+              status: error.response.status,
+              statusText: error.response.statusText,
+              data: errorData,
+              requestId: error.response.headers['x-request-id'],
+              response: {
+                status: error.response.status,
+                statusText: error.response.statusText,
+                data: errorData,
+              },
+            };
+          } else if (error.request) {
+            // La solicitud se hizo pero no se recibió respuesta
+            throw {
+              message: 'No se recibió respuesta del servidor de Mercado Pago',
+              status: 0,
+              request: error.request,
+            };
+          }
+        }
+        // Si no es un error de axios, re-lanzar el error original
+        throw axiosError;
       }
-
-      const responseData = JSON.parse(responseText);
-      console.log('Respuesta recibida de Mercado Pago:', JSON.stringify(responseData, null, 2));
-
-      return {
-        id: responseData.id,
-        status: responseData.status,
-        initPoint: responseData.init_point || responseData.sandbox_init_point || null,
-        sandboxInitPoint: responseData.sandbox_init_point || null,
-        externalReference: responseData.external_reference,
-        payerEmail: responseData.payer_email,
-        reason: responseData.reason,
-        autoRecurring: responseData.auto_recurring,
-      };
     } catch (error: any) {
       console.error('=== ERROR AL CREAR SUSCRIPCIÓN EN MERCADO PAGO ===');
       console.error('Error:', error);
@@ -342,31 +368,23 @@ export class MercadoPagoService {
   async getSubscription(subscriptionId: string) {
     try {
       const apiUrl = `${this.baseUrl}/preapproval/${subscriptionId}`;
-      const response = await fetch(apiUrl, {
-        method: 'GET',
+      const response = await axios.get(apiUrl, {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
         },
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorData: any;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch (e) {
-          errorData = { message: errorText };
-        }
-        throw {
-          message: errorData.message || `Error HTTP ${response.status}`,
-          status: response.status,
-          data: errorData,
-        };
-      }
-
-      return await response.json();
+      return response.data;
     } catch (error: any) {
       console.error('Error obteniendo suscripción de Mercado Pago:', error);
+      
+      if (axios.isAxiosError(error) && error.response) {
+        const errorData = error.response.data || { message: 'Error desconocido' };
+        throw new BadRequestException(
+          `Error al obtener la suscripción de Mercado Pago: ${(errorData as any).message || 'Error desconocido'}`,
+        );
+      }
+      
       throw new BadRequestException(
         `Error al obtener la suscripción de Mercado Pago: ${error.message || 'Error desconocido'}`,
       );
@@ -376,35 +394,30 @@ export class MercadoPagoService {
   async cancelSubscription(subscriptionId: string) {
     try {
       const apiUrl = `${this.baseUrl}/preapproval/${subscriptionId}`;
-      const response = await fetch(apiUrl, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
-        body: JSON.stringify({
+      const response = await axios.put(
+        apiUrl,
+        {
           status: 'cancelled',
-        }),
-      });
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.accessToken}`,
+          },
+        },
+      );
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorData: any;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch (e) {
-          errorData = { message: errorText };
-        }
-        throw {
-          message: errorData.message || `Error HTTP ${response.status}`,
-          status: response.status,
-          data: errorData,
-        };
-      }
-
-      return await response.json();
+      return response.data;
     } catch (error: any) {
       console.error('Error cancelando suscripción en Mercado Pago:', error);
+      
+      if (axios.isAxiosError(error) && error.response) {
+        const errorData = error.response.data || { message: 'Error desconocido' };
+        throw new BadRequestException(
+          `Error al cancelar la suscripción de Mercado Pago: ${(errorData as any).message || 'Error desconocido'}`,
+        );
+      }
+      
       throw new BadRequestException(
         `Error al cancelar la suscripción de Mercado Pago: ${error.message || 'Error desconocido'}`,
       );
@@ -414,31 +427,23 @@ export class MercadoPagoService {
   async getPayment(paymentId: string) {
     try {
       const apiUrl = `${this.baseUrl}/v1/payments/${paymentId}`;
-      const response = await fetch(apiUrl, {
-        method: 'GET',
+      const response = await axios.get(apiUrl, {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
         },
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorData: any;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch (e) {
-          errorData = { message: errorText };
-        }
-        throw {
-          message: errorData.message || `Error HTTP ${response.status}`,
-          status: response.status,
-          data: errorData,
-        };
-      }
-
-      return await response.json();
+      return response.data;
     } catch (error: any) {
       console.error('Error obteniendo pago de Mercado Pago:', error);
+      
+      if (axios.isAxiosError(error) && error.response) {
+        const errorData = error.response.data || { message: 'Error desconocido' };
+        throw new BadRequestException(
+          `Error al obtener el pago de Mercado Pago: ${(errorData as any).message || 'Error desconocido'}`,
+        );
+      }
+      
       throw new BadRequestException(
         `Error al obtener el pago de Mercado Pago: ${error.message || 'Error desconocido'}`,
       );
