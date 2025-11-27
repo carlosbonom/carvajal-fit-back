@@ -56,10 +56,6 @@ export class MercadoPagoService {
       startDate.setDate(startDate.getDate() + 1); // Al menos un día en el futuro
       startDate.setHours(0, 0, 0, 0);
       
-      // Calcular fecha de fin (opcional, puedes dejarlo null para suscripción indefinida)
-      // Por ahora lo dejamos indefinido
-      const endDate = null;
-
       // Ajustar frecuencia para semanas y años
       let adjustedFrequency = data.intervalCount;
       if (data.intervalType === 'week') {
@@ -83,10 +79,12 @@ export class MercadoPagoService {
         back_url: data.backUrl || `${this.configService.get<string>('APP_URL', 'http://localhost:3000')}/subscriptions/callback`,
       };
 
-      // Si hay fecha de fin, agregarla en formato ISO 8601
-      if (endDate) {
-        subscriptionData.auto_recurring.end_date = endDate instanceof Date ? endDate.toISOString() : endDate;
-      }
+      // Nota: end_date no se incluye para suscripciones indefinidas
+      // Si en el futuro se necesita una fecha de fin, se puede agregar aquí:
+      // const endDate: Date | null = null;
+      // if (endDate) {
+      //   subscriptionData.auto_recurring.end_date = endDate.toISOString();
+      // }
 
       // Agregar información del pagador si está disponible
       if (data.payerFirstName || data.payerLastName) {
