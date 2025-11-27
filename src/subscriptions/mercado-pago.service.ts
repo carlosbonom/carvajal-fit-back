@@ -120,6 +120,16 @@ export class MercadoPagoService {
       //   subscriptionData.auto_recurring.end_date = endDate.toISOString();
       // }
 
+      // Si hay card_token_id, es una suscripción con pago autorizado
+      // De lo contrario, es una suscripción con pago pendiente
+      if (data.paymentMethodId) {
+        subscriptionData.card_token_id = data.paymentMethodId;
+        subscriptionData.status = 'authorized';
+        console.log('⚠️ Creando suscripción con pago AUTORIZADO (card_token_id proporcionado)');
+      } else {
+        console.log('⚠️ Creando suscripción con pago PENDIENTE (sin card_token_id)');
+      }
+
       // Agregar información del pagador si está disponible
       if (data.payerFirstName || data.payerLastName) {
         subscriptionData['payer'] = {
@@ -139,7 +149,7 @@ export class MercadoPagoService {
       }
 
       // Log del payload para debugging
-      const isSandbox = this.configService.get<string>('MERCADOPAGO_ACCESS_TOKEN')?.startsWith('TEST-');
+      const isSandbox = this.accessToken.startsWith('TEST-');
       console.log('=== PAYLOAD ENVIADO A MERCADO PAGO ===');
       console.log(`Ambiente: ${isSandbox ? 'SANDBOX' : 'PRODUCCIÓN'}`);
       console.log(JSON.stringify(subscriptionData, null, 2));
@@ -151,13 +161,25 @@ export class MercadoPagoService {
       const apiUrl = `${this.baseUrl}/preapproval`;
       console.log(`URL: ${apiUrl}`);
       
+      // Preparar headers
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.accessToken}`,
+      };
+      
+      // Agregar X-scope: stage para sandbox (según documentación de Mercado Pago)
+      if (isSandbox) {
+        headers['X-scope'] = 'stage';
+      }
+      
+      // Agregar X-Idempotency-Key para evitar duplicados
+      headers['X-Idempotency-Key'] = data.externalReference;
+      
+      console.log('Headers:', JSON.stringify(headers, null, 2));
+      
       const response = await fetch(apiUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.accessToken}`,
-          'X-Idempotency-Key': data.externalReference, // Usar external_reference como idempotency key
-        },
+        headers,
         body: JSON.stringify(subscriptionData),
       });
 
