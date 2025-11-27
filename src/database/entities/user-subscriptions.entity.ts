@@ -73,7 +73,7 @@ export class UserSubscription {
   autoRenew: boolean;
 
   @Column({ type: 'text', nullable: true, name: 'cancellation_reason' })
-  cancellationReason: string;
+  cancellationReason: string | null;
 
   @Column({ type: 'varchar', length: 255, nullable: true, name: 'mercado_pago_subscription_id' })
   mercadoPagoSubscriptionId: string;

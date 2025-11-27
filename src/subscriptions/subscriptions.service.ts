@@ -170,12 +170,17 @@ export class SubscriptionsService {
         backUrl: createSubscriptionDto.backUrl,
       });
 
+      // Validar que el ID existe
+      if (!mercadoPagoResponse.id) {
+        throw new BadRequestException('No se recibió un ID de suscripción de Mercado Pago');
+      }
+
       // Actualizar la suscripción con el ID de Mercado Pago
       savedSubscription.mercadoPagoSubscriptionId = mercadoPagoResponse.id.toString();
       savedSubscription.metadata = {
         mercadoPagoStatus: mercadoPagoResponse.status,
         initPoint: mercadoPagoResponse.initPoint,
-        sandboxInitPoint: mercadoPagoResponse.sandboxInitPoint,
+        sandboxInitPoint: mercadoPagoResponse.sandboxInitPoint || null,
       };
 
       // El estado inicial será 'pending' hasta que el usuario autorice el pago
@@ -193,7 +198,7 @@ export class SubscriptionsService {
         id: savedSubscription.id,
         status: savedSubscription.status,
         mercadoPagoSubscriptionId: mercadoPagoResponse.id.toString(),
-        initPoint: mercadoPagoResponse.initPoint || mercadoPagoResponse.sandboxInitPoint,
+        initPoint: mercadoPagoResponse.initPoint || mercadoPagoResponse.sandboxInitPoint || '',
         message: 'Suscripción creada exitosamente',
       };
     } catch (error) {
@@ -342,26 +347,28 @@ export class SubscriptionsService {
             });
 
             if (!paymentRecord) {
+              // Validar que el status existe
+              const paymentStatus = mpPayment.status || 'pending';
+              
               // Crear nuevo registro de pago
-              paymentRecord = this.subscriptionPaymentRepository.create({
-                userSubscription: subscription,
-                user: subscription.user,
-                amount: mpPayment.transaction_amount || 0,
-                currency: mpPayment.currency_id || 'CLP',
-                status: this.mapMPPaymentStatusToOurStatus(mpPayment.status),
-                paymentMethod: mpPayment.payment_method_id || null,
-                paymentProvider: 'mercadopago',
-                transactionId: mpPayment.id?.toString(),
-                periodStart: subscription.currentPeriodStart,
-                periodEnd: subscription.currentPeriodEnd,
-                paidAt: mpPayment.date_approved ? new Date(mpPayment.date_approved) : null,
-                metadata: {
-                  mpPaymentData: mpPayment,
-                  notificationType: notification.type,
-                },
-              });
-
-              await this.subscriptionPaymentRepository.save(paymentRecord);
+              const newPayment = new SubscriptionPayment();
+              newPayment.userSubscription = subscription;
+              newPayment.user = subscription.user;
+              newPayment.amount = mpPayment.transaction_amount || 0;
+              newPayment.currency = mpPayment.currency_id || 'CLP';
+              newPayment.status = this.mapMPPaymentStatusToOurStatus(paymentStatus);
+              newPayment.paymentMethod = mpPayment.payment_method_id || null;
+              newPayment.paymentProvider = 'mercadopago';
+              newPayment.transactionId = mpPayment.id?.toString() || null;
+              newPayment.periodStart = subscription.currentPeriodStart;
+              newPayment.periodEnd = subscription.currentPeriodEnd;
+              newPayment.paidAt = mpPayment.date_approved ? new Date(mpPayment.date_approved) : null;
+              newPayment.metadata = {
+                mpPaymentData: mpPayment,
+                notificationType: notification.type,
+              };
+              
+              paymentRecord = await this.subscriptionPaymentRepository.save(newPayment);
 
               // Si el pago fue aprobado, actualizar el período de la suscripción
               if (mpPayment.status === 'approved') {
@@ -375,8 +382,11 @@ export class SubscriptionsService {
                 subscription.status = SubscriptionStatus.ACTIVE;
               }
             } else {
+              // Validar que el status existe
+              const paymentStatus = mpPayment.status || 'pending';
+              
               // Actualizar el registro existente
-              paymentRecord.status = this.mapMPPaymentStatusToOurStatus(mpPayment.status);
+              paymentRecord.status = this.mapMPPaymentStatusToOurStatus(paymentStatus);
               paymentRecord.paidAt = mpPayment.date_approved ? new Date(mpPayment.date_approved) : paymentRecord.paidAt;
               paymentRecord.metadata = {
                 ...paymentRecord.metadata,
@@ -642,119 +652,6 @@ export class SubscriptionsService {
       },
       order: { createdAt: 'DESC' },
     });
-  }
-
-  private async handlePaymentNotification(
-    subscription: UserSubscription,
-    mpSubscription: any,
-    notification: any,
-  ): Promise<void> {
-    // Cuando se procesa un pago recurrente
-    // Mercado Pago envía automáticamente una notificación cada vez que se cobra (mes a mes, año a año)
-    
-    try {
-      // Obtener información del pago desde Mercado Pago
-      // El notification.data.id puede ser el ID del pago o de la suscripción
-      let paymentId = notification.data?.id;
-      
-      // Si el tipo es 'payment', el ID es del pago directamente
-      // Si es 'subscription_payment', necesitamos obtener el último pago de la suscripción
-      if (notification.type === 'subscription_payment') {
-        // Para subscription_payment, el ID en data.id es de la suscripción
-        // Necesitamos obtener los pagos asociados desde la suscripción
-        // Por ahora, usamos el ID de la suscripción para obtener información actualizada
-        paymentId = null; // No tenemos el ID del pago directamente en este caso
-      }
-
-      // Si tenemos el ID del pago, obtener su información
-      if (paymentId && notification.type === 'payment') {
-        try {
-          const mpPayment = await this.mercadoPagoService.getPayment(paymentId.toString());
-          
-          // Verificar si el pago está relacionado con esta suscripción
-          if (mpPayment.external_reference === subscription.id || 
-              mpPayment.metadata?.subscription_id === subscription.mercadoPagoSubscriptionId) {
-            
-            // Buscar si ya existe un registro de pago con este transaction_id
-            let paymentRecord = await this.subscriptionPaymentRepository.findOne({
-              where: { transactionId: mpPayment.id?.toString() },
-            });
-
-            if (!paymentRecord) {
-              // Crear nuevo registro de pago
-              paymentRecord = this.subscriptionPaymentRepository.create({
-                userSubscription: subscription,
-                user: subscription.user,
-                amount: mpPayment.transaction_amount || 0,
-                currency: mpPayment.currency_id || 'CLP',
-                status: this.mapMPPaymentStatusToOurStatus(mpPayment.status),
-                paymentMethod: mpPayment.payment_method_id || null,
-                paymentProvider: 'mercadopago',
-                transactionId: mpPayment.id?.toString(),
-                periodStart: subscription.currentPeriodStart,
-                periodEnd: subscription.currentPeriodEnd,
-                paidAt: mpPayment.date_approved ? new Date(mpPayment.date_approved) : null,
-                metadata: {
-                  mpPaymentData: mpPayment,
-                  notificationType: notification.type,
-                },
-              });
-
-              await this.subscriptionPaymentRepository.save(paymentRecord);
-
-              // Si el pago fue aprobado, actualizar el período de la suscripción
-              if (mpPayment.status === 'approved') {
-                const now = new Date();
-                subscription.currentPeriodStart = now;
-                subscription.currentPeriodEnd = this.calculatePeriodEnd(
-                  now,
-                  subscription.billingCycle.intervalType,
-                  subscription.billingCycle.intervalCount,
-                );
-                subscription.status = SubscriptionStatus.ACTIVE;
-              }
-            } else {
-              // Actualizar el registro existente
-              paymentRecord.status = this.mapMPPaymentStatusToOurStatus(mpPayment.status);
-              paymentRecord.paidAt = mpPayment.date_approved ? new Date(mpPayment.date_approved) : paymentRecord.paidAt;
-              paymentRecord.metadata = {
-                ...paymentRecord.metadata,
-                mpPaymentData: mpPayment,
-                lastUpdated: new Date().toISOString(),
-              };
-              await this.subscriptionPaymentRepository.save(paymentRecord);
-            }
-          }
-        } catch (error) {
-          console.error('Error obteniendo información del pago desde MP:', error);
-          // Continuar con la actualización del estado de la suscripción aunque falle
-        }
-      }
-
-      // Actualizar estado de la suscripción según el estado de MP
-      await this.updateSubscriptionStatusFromMP(subscription, mpSubscription);
-    } catch (error) {
-      console.error('Error procesando notificación de pago:', error);
-      // Aun así, actualizar el estado de la suscripción
-      await this.updateSubscriptionStatusFromMP(subscription, mpSubscription);
-    }
-  }
-
-  private mapMPPaymentStatusToOurStatus(mpStatus: string): PaymentStatus {
-    switch (mpStatus) {
-      case 'approved':
-        return PaymentStatus.COMPLETED;
-      case 'pending':
-      case 'in_process':
-        return PaymentStatus.PENDING;
-      case 'rejected':
-      case 'cancelled':
-      case 'refunded':
-      case 'charged_back':
-        return PaymentStatus.FAILED;
-      default:
-        return PaymentStatus.PENDING;
-    }
   }
 }
 

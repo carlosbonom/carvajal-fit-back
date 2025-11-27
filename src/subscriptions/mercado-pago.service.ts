@@ -110,7 +110,7 @@ export class MercadoPagoService {
         id: response.id,
         status: response.status,
         initPoint: response.init_point,
-        sandboxInitPoint: response.sandbox_init_point,
+        sandboxInitPoint: (response as any).sandbox_init_point || null,
         externalReference: response.external_reference,
         payerEmail: response.payer_email,
         reason: response.reason,

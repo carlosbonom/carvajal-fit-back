@@ -14,9 +14,9 @@ export class UserSubscriptionDto {
   startedAt: Date;
   currentPeriodStart: Date;
   currentPeriodEnd: Date;
-  cancelledAt?: Date;
+  cancelledAt?: Date | null;
   autoRenew: boolean;
-  cancellationReason?: string;
+  cancellationReason?: string | null;
   mercadoPagoSubscriptionId?: string;
   plan: SubscriptionPlanDto;
   billingCycle: BillingCycleInfoDto;

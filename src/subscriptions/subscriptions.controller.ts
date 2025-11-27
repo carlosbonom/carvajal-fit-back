@@ -7,8 +7,8 @@ import {
   HttpStatus,
   UseGuards,
   Req,
-  RawBodyRequest,
 } from '@nestjs/common';
+import type { RawBodyRequest } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
 import { Public } from '../auth/decorators/public.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';

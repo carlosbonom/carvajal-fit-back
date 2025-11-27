@@ -47,13 +47,13 @@ export class SubscriptionPayment {
   status: PaymentStatus;
 
   @Column({ type: 'varchar', length: 50, nullable: true, name: 'payment_method' })
-  paymentMethod: string;
+  paymentMethod: string | null;
 
   @Column({ type: 'varchar', length: 50, nullable: true, name: 'payment_provider' })
-  paymentProvider: string;
+  paymentProvider: string | null;
 
   @Column({ type: 'varchar', length: 255, unique: true, nullable: true, name: 'transaction_id' })
-  transactionId: string;
+  transactionId: string | null;
 
   @Column({ type: 'timestamptz', nullable: false, name: 'period_start' })
   periodStart: Date;
@@ -62,10 +62,10 @@ export class SubscriptionPayment {
   periodEnd: Date;
 
   @Column({ type: 'timestamptz', nullable: true, name: 'paid_at' })
-  paidAt: Date;
+  paidAt: Date | null;
 
   @Column({ type: 'timestamptz', nullable: true, name: 'refunded_at' })
-  refundedAt: Date;
+  refundedAt: Date | null;
 
   @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, any>;
