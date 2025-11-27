@@ -60,9 +60,10 @@ export class MercadoPagoService {
       startDate.setUTCDate(startDate.getUTCDate() + 1); // Al menos un día en el futuro
       startDate.setUTCHours(0, 0, 0, 0);
       
-      // Formatear fecha en formato ISO 8601 completo con Z (UTC): YYYY-MM-DDTHH:MM:SSZ
-      // Este es el formato requerido por Mercado Pago para start_date
-      const formattedStartDate = startDate.toISOString();
+      // Formatear fecha en formato ISO 8601 sin milisegundos: YYYY-MM-DDTHH:MM:SSZ
+      // Mercado Pago puede requerir el formato sin milisegundos
+      const isoString = startDate.toISOString();
+      const formattedStartDate = isoString.replace(/\.\d{3}Z$/, 'Z');
       console.log(`Fecha de inicio calculada: ${formattedStartDate}`);
       
       // Ajustar frecuencia para semanas y años
@@ -78,6 +79,10 @@ export class MercadoPagoService {
       if (!data.amount || data.amount <= 0 || isNaN(data.amount)) {
         throw new BadRequestException('El monto debe ser un número positivo válido');
       }
+      
+      // Asegurar que el monto sea un número decimal (no entero)
+      // Mercado Pago puede requerir que sea un float explícito
+      const transactionAmount = parseFloat(data.amount.toFixed(2));
 
       // Validar que la frecuencia sea válida
       if (!adjustedFrequency || adjustedFrequency <= 0) {
@@ -93,7 +98,7 @@ export class MercadoPagoService {
           frequency: adjustedFrequency,
           frequency_type: frequencyType,
           start_date: formattedStartDate,
-          transaction_amount: Number(data.amount.toFixed(2)), // Asegurar formato decimal correcto
+          transaction_amount: transactionAmount,
           currency_id: data.currency,
         },
         back_url: data.backUrl || `${this.configService.get<string>('APP_URL', 'http://localhost:3000')}/subscriptions/callback`,
@@ -149,6 +154,10 @@ export class MercadoPagoService {
       console.error('Tipo de error:', typeof error);
       console.error('Constructor:', error?.constructor?.name);
       
+      // Obtener todas las propiedades del error
+      const errorKeys = Object.keys(error);
+      console.error('Propiedades del error:', errorKeys);
+      
       // Extraer más información del error del SDK de Mercado Pago
       let errorMessage = error.message || 'Error desconocido';
       let errorDetails: any = {
@@ -159,6 +168,15 @@ export class MercadoPagoService {
         response: error.response,
         stack: error.stack,
       };
+      
+      // Intentar acceder a todas las propiedades posibles
+      for (const key of errorKeys) {
+        try {
+          errorDetails[key] = error[key];
+        } catch (e) {
+          // Ignorar propiedades que no se pueden acceder
+        }
+      }
       
       // El SDK de Mercado Pago puede tener la información en diferentes lugares
       if (error.cause) {
@@ -175,6 +193,16 @@ export class MercadoPagoService {
         }
         if (error.response.data) {
           errorDetails.responseData = error.response.data;
+        }
+        // Intentar acceder a propiedades de la respuesta HTTP
+        if (error.response.status) {
+          errorDetails.httpStatus = error.response.status;
+        }
+        if (error.response.statusText) {
+          errorDetails.httpStatusText = error.response.statusText;
+        }
+        if (error.response.headers) {
+          errorDetails.httpHeaders = error.response.headers;
         }
       }
       
@@ -204,6 +232,11 @@ export class MercadoPagoService {
       // Log detallado del error
       console.error('Detalles completos del error:', JSON.stringify(errorDetails, null, 2));
       console.error('Error completo (objeto):', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+      
+      // Intentar loggear el error de forma más directa
+      console.error('Error.toString():', error.toString());
+      console.error('Error.valueOf():', error.valueOf());
+      
       console.error('==================================================');
       
       throw new BadRequestException(
