@@ -36,5 +36,9 @@ export class CreateSubscriptionDto {
   @IsString()
   @IsOptional()
   backUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentMethod?: string;
 }
 
