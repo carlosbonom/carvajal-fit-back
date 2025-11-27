@@ -47,8 +47,12 @@ export class MercadoPagoService {
 
   async createSubscription(data: CreateSubscriptionData) {
     try {
+      console.log('=== DATOS RECIBIDOS PARA CREAR SUSCRIPCIÓN ===');
+      console.log('Datos:', JSON.stringify(data, null, 2));
+      
       // Mapear intervalType a frequency_type de Mercado Pago
       const frequencyType = this.mapIntervalTypeToFrequencyType(data.intervalType);
+      console.log(`IntervalType: ${data.intervalType} -> FrequencyType: ${frequencyType}`);
       
       // Calcular fecha de inicio (mañana a las 00:00:00 UTC para asegurar que sea válida)
       // Mercado Pago PreApproval API requiere formato ISO 8601 completo: YYYY-MM-DDTHH:MM:SSZ
@@ -59,6 +63,7 @@ export class MercadoPagoService {
       // Formatear fecha en formato ISO 8601 completo con Z (UTC): YYYY-MM-DDTHH:MM:SSZ
       // Este es el formato requerido por Mercado Pago para start_date
       const formattedStartDate = startDate.toISOString();
+      console.log(`Fecha de inicio calculada: ${formattedStartDate}`);
       
       // Ajustar frecuencia para semanas y años
       let adjustedFrequency = data.intervalCount;
@@ -67,6 +72,7 @@ export class MercadoPagoService {
       } else if (data.intervalType === 'year') {
         adjustedFrequency = data.intervalCount * 12; // Convertir años a meses
       }
+      console.log(`Frecuencia ajustada: ${adjustedFrequency} (intervalCount: ${data.intervalCount})`);
 
       // Validar que el monto sea un número válido y positivo
       if (!data.amount || data.amount <= 0 || isNaN(data.amount)) {
@@ -123,7 +129,9 @@ export class MercadoPagoService {
       console.log(JSON.stringify(subscriptionData, null, 2));
       console.log('=======================================');
 
+      console.log('Enviando solicitud a Mercado Pago...');
       const response = await this.preApproval.create({ body: subscriptionData });
+      console.log('Respuesta recibida de Mercado Pago:', JSON.stringify(response, null, 2));
 
       return {
         id: response.id,
@@ -136,7 +144,10 @@ export class MercadoPagoService {
         autoRecurring: response.auto_recurring,
       };
     } catch (error: any) {
-      console.error('Error creando suscripción en Mercado Pago:', error);
+      console.error('=== ERROR AL CREAR SUSCRIPCIÓN EN MERCADO PAGO ===');
+      console.error('Error:', error);
+      console.error('Tipo de error:', typeof error);
+      console.error('Constructor:', error?.constructor?.name);
       
       // Extraer más información del error del SDK de Mercado Pago
       let errorMessage = error.message || 'Error desconocido';
@@ -181,9 +192,19 @@ export class MercadoPagoService {
         }
       }
       
+      // Intentar acceder a propiedades adicionales del error
+      if (error.apiResponse) {
+        errorDetails.apiResponse = error.apiResponse;
+      }
+      
+      if (error.statusCode) {
+        errorDetails.statusCode = error.statusCode;
+      }
+      
       // Log detallado del error
       console.error('Detalles completos del error:', JSON.stringify(errorDetails, null, 2));
-      console.error('Error completo (objeto):', error);
+      console.error('Error completo (objeto):', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+      console.error('==================================================');
       
       throw new BadRequestException(
         `Error al crear la suscripción en Mercado Pago: ${errorMessage}`,
