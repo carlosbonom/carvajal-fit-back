@@ -97,3 +97,4 @@ metadata                       | jsonb                  | YES
 3. Verifica que la tabla `user_subscriptions` existe
 4. Reinicia la aplicación después de ejecutar la migración
 
+

@@ -54,12 +54,10 @@ export class MercadoPagoService {
       
       // Calcular fecha de inicio
       // Mercado Pago requiere que la fecha esté en el futuro
-      // Para suscripciones, generalmente se usa la fecha actual + 1 día o más
-      // Usar la fecha actual + 1 día a las 00:00:00 UTC
+      // Para suscripciones, generalmente se usa la fecha actual + 1 día o másr
       const now = new Date();
       const startDate = new Date(now);
-      startDate.setUTCDate(startDate.getUTCDate() ); // Mañana
-      startDate.setUTCHours(0, 0, 0, 0);
+      startDate.setUTCDate(startDate.getUTCDate() ); 
       
       // Calcular fecha de fin (1 año desde la fecha de inicio)
       const endDate = new Date(startDate);

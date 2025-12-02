@@ -25,3 +25,4 @@ WHERE table_name = 'user_subscriptions'
     AND column_name IN ('mercado_pago_subscription_id', 'metadata')
 ORDER BY column_name;
 
+
