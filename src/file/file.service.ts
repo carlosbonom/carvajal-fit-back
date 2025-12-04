@@ -61,7 +61,7 @@ export class FileService {
             } else {
               body = file.buffer;
             }
-            56958897853
+            
             const command = new PutObjectCommand({
               Bucket: this.bucketName,
               Key: key,
