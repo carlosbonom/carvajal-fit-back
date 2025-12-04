@@ -15,6 +15,7 @@ import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { SubscriptionResponseDto } from './dto/subscription-response.dto';
 import { UserSubscriptionDto, BillingCycleInfoDto } from './dto/user-subscription-response.dto';
 import { CancelSubscriptionDto } from './dto/cancel-subscription.dto';
+import { UpdateSubscriptionPlanDto } from './dto/update-subscription-plan.dto';
 import { MercadoPagoService } from './mercado-pago.service';
 import { SubscriptionPayment, PaymentStatus } from '../database/entities/subscription-payments.entity';
 
@@ -77,6 +78,68 @@ export class SubscriptionsService {
     );
 
     return plansWithPrices;
+  }
+
+  async updateSubscriptionPlan(
+    id: string,
+    updateDto: UpdateSubscriptionPlanDto,
+  ): Promise<SubscriptionPlanDto> {
+    // Buscar el plan existente
+    const plan = await this.subscriptionPlanRepository.findOne({
+      where: { id },
+    });
+
+    if (!plan) {
+      throw new NotFoundException(`Plan de suscripción con ID ${id} no encontrado`);
+    }
+
+    // Validar que el slug no esté en uso por otro plan si se está actualizando
+    if (updateDto.slug && updateDto.slug !== plan.slug) {
+      const existingPlanWithSlug = await this.subscriptionPlanRepository.findOne({
+        where: { slug: updateDto.slug },
+      });
+
+      if (existingPlanWithSlug && existingPlanWithSlug.id !== id) {
+        throw new BadRequestException(`Ya existe un plan con el slug "${updateDto.slug}"`);
+      }
+    }
+
+    // Actualizar los campos proporcionados
+    Object.assign(plan, updateDto);
+
+    // Guardar los cambios
+    const updatedPlan = await this.subscriptionPlanRepository.save(plan);
+
+    // Obtener los precios del plan actualizado
+    const prices = await this.subscriptionPriceRepository
+      .createQueryBuilder('price')
+      .leftJoinAndSelect('price.billingCycle', 'billingCycle')
+      .where('price.plan_id = :planId', { planId: updatedPlan.id })
+      .andWhere('price.is_active = :isActive', { isActive: true })
+      .orderBy('billingCycle.slug', 'ASC')
+      .getMany();
+
+    const priceDtos: SubscriptionPriceDto[] = prices.map((price) => ({
+      id: price.id,
+      currency: price.currency,
+      amount: parseFloat(price.amount.toString()),
+      billingCycle: {
+        id: price.billingCycle.id,
+        name: price.billingCycle.name,
+        slug: price.billingCycle.slug,
+        intervalType: price.billingCycle.intervalType,
+        intervalCount: price.billingCycle.intervalCount,
+      } as BillingCycleDto,
+    }));
+
+    return {
+      id: updatedPlan.id,
+      name: updatedPlan.name,
+      slug: updatedPlan.slug,
+      description: updatedPlan.description || '',
+      features: updatedPlan.features || [],
+      prices: priceDtos,
+    } as SubscriptionPlanDto;
   }
 
   async createSubscription(

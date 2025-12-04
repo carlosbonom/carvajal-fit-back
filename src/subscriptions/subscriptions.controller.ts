@@ -2,7 +2,9 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Body,
+  Param,
   HttpCode,
   HttpStatus,
   UseGuards,
@@ -14,8 +16,9 @@ import { Public } from '../auth/decorators/public.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../database/entities/users.entity';
-import { SubscriptionPlansResponseDto } from './dto/subscription-plan-response.dto';
+import { SubscriptionPlansResponseDto, SubscriptionPlanDto } from './dto/subscription-plan-response.dto';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
+import { UpdateSubscriptionPlanDto } from './dto/update-subscription-plan.dto';
 import { SubscriptionResponseDto } from './dto/subscription-response.dto';
 import { WebhookNotificationDto } from './dto/webhook-notification.dto';
 import { UserSubscriptionDto } from './dto/user-subscription-response.dto';
@@ -31,6 +34,16 @@ export class SubscriptionsController {
   async getAvailablePlans(): Promise<SubscriptionPlansResponseDto> {
     const plans = await this.subscriptionsService.getAvailablePlans();
     return { plans };
+  }
+
+  @Put('plans/:id')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async updateSubscriptionPlan(
+    @Param('id') id: string,
+    @Body() updateDto: UpdateSubscriptionPlanDto,
+  ): Promise<SubscriptionPlanDto> {
+    return this.subscriptionsService.updateSubscriptionPlan(id, updateDto);
   }
 
   @Post('subscribe')

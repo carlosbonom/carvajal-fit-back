@@ -26,3 +26,4 @@ WHERE table_name = 'user_subscriptions'
 ORDER BY column_name;
 
 
+

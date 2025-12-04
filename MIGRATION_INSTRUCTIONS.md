@@ -98,3 +98,4 @@ metadata                       | jsonb                  | YES
 4. Reinicia la aplicación después de ejecutar la migración
 
 
+
