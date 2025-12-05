@@ -18,7 +18,8 @@ import { CoursesService } from './courses.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { CreateContentDto } from './dto/create-content.dto';
-import { CourseResponseDto, ContentResponseDto } from './dto/course-response.dto';
+import { CreateContentResourceDto } from './dto/create-content-resource.dto';
+import { CourseResponseDto, ContentResponseDto, ContentResourceResponseDto } from './dto/course-response.dto';
 
 @Controller('courses')
 export class CoursesController {
@@ -74,6 +75,29 @@ export class CoursesController {
     file?: Express.Multer.File,
   ): Promise<ContentResponseDto> {
     return this.coursesService.createContent(courseId, createContentDto, file);
+  }
+
+  @Post('content/:contentId/resources')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  @HttpCode(HttpStatus.CREATED)
+  async createContentResource(
+    @Param('contentId') contentId: string,
+    @Body() createResourceDto: CreateContentResourceDto,
+    @UploadedFile(
+      new ParseFilePipe({
+        fileIsRequired: false,
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 100 * 1024 * 1024 }), // 100MB
+          new FileTypeValidator({ 
+            fileType: /^(video|image|application|audio|text)\// 
+          }),
+        ],
+      }),
+    )
+    file?: Express.Multer.File,
+  ): Promise<ContentResourceResponseDto> {
+    return this.coursesService.createContentResource(contentId, createResourceDto, file);
   }
 }
 

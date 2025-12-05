@@ -22,10 +22,19 @@ export class CourseResponseDto {
   updatedAt: Date;
 }
 
+export class ContentResourceResponseDto {
+  id: string;
+  title: string;
+  description: string | null;
+  resourceUrl: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export class ContentResponseDto {
   id: string;
   title: string;
-  slug: string;
+  slug: string | null;
   description: string | null;
   contentType: string;
   unlockMonth: number;
@@ -33,8 +42,8 @@ export class ContentResponseDto {
   thumbnailUrl: string | null;
   durationSeconds: number | null;
   sortOrder: number;
-  hasResources: boolean;
-  resourcesUrl: string | null;
+  availabilityType: string;
+  resources: ContentResourceResponseDto[];
   isPreview: boolean;
   course: {
     id: string;

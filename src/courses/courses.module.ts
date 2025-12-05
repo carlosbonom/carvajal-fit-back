@@ -4,12 +4,13 @@ import { CoursesController } from './courses.controller';
 import { CoursesService } from './courses.service';
 import { Course } from '../database/entities/courses.entity';
 import { Content } from '../database/entities/content.entity';
+import { ContentResource } from '../database/entities/content-resources.entity';
 import { Creator } from '../database/entities/creators.entity';
 import { FileModule } from '../file/file.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Course, Content, Creator]),
+    TypeOrmModule.forFeature([Course, Content, ContentResource, Creator]),
     FileModule,
   ],
   controllers: [CoursesController],

@@ -6,11 +6,13 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
 import { Course } from '../database/entities/courses.entity';
-import { Content, ContentType } from '../database/entities/content.entity';
+import { Content, ContentType, AvailabilityType } from '../database/entities/content.entity';
+import { ContentResource } from '../database/entities/content-resources.entity';
 import { Creator } from '../database/entities/creators.entity';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { CreateContentDto } from './dto/create-content.dto';
-import { CourseResponseDto, ContentResponseDto } from './dto/course-response.dto';
+import { CreateContentResourceDto } from './dto/create-content-resource.dto';
+import { CourseResponseDto, ContentResponseDto, ContentResourceResponseDto } from './dto/course-response.dto';
 import { FileService } from '../file/file.service';
 
 @Injectable()
@@ -20,6 +22,8 @@ export class CoursesService {
     private readonly courseRepository: Repository<Course>,
     @InjectRepository(Content)
     private readonly contentRepository: Repository<Content>,
+    @InjectRepository(ContentResource)
+    private readonly contentResourceRepository: Repository<ContentResource>,
     @InjectRepository(Creator)
     private readonly creatorRepository: Repository<Creator>,
     private readonly fileService: FileService,
@@ -105,7 +109,7 @@ export class CoursesService {
     const contents = await this.contentRepository.find({
       where: { course: { id: courseId } },
       order: { sortOrder: 'ASC' },
-      relations: ['course'],
+      relations: ['course', 'resources'],
     });
 
     return contents.map((content) => ({
@@ -119,8 +123,15 @@ export class CoursesService {
       thumbnailUrl: content.thumbnailUrl,
       durationSeconds: content.durationSeconds,
       sortOrder: content.sortOrder,
-      hasResources: content.hasResources,
-      resourcesUrl: content.resourcesUrl,
+      availabilityType: content.availabilityType,
+      resources: content.resources?.map((resource) => ({
+        id: resource.id,
+        title: resource.title,
+        description: resource.description,
+        resourceUrl: resource.resourceUrl,
+        createdAt: resource.createdAt,
+        updatedAt: resource.updatedAt,
+      })) || [],
       isPreview: content.isPreview,
       course: {
         id: content.course.id,
@@ -216,18 +227,20 @@ export class CoursesService {
       throw new NotFoundException(`Curso con ID ${courseId} no encontrado`);
     }
 
-    // Validar que el slug no esté en uso en este curso
-    const existingContent = await this.contentRepository.findOne({
-      where: {
-        course: { id: courseId },
-        slug: createContentDto.slug,
-      },
-    });
+    // Validar que el slug no esté en uso en este curso (solo si se proporciona)
+    if (createContentDto.slug) {
+      const existingContent = await this.contentRepository.findOne({
+        where: {
+          course: { id: courseId },
+          slug: createContentDto.slug,
+        },
+      });
 
-    if (existingContent) {
-      throw new BadRequestException(
-        `Ya existe contenido con el slug "${createContentDto.slug}" en este curso`,
-      );
+      if (existingContent) {
+        throw new BadRequestException(
+          `Ya existe contenido con el slug "${createContentDto.slug}" en este curso`,
+        );
+      }
     }
 
     // Validar que se proporcione contentUrl o un archivo
@@ -259,7 +272,7 @@ export class CoursesService {
     // Crear el contenido
     const content = this.contentRepository.create({
       title: createContentDto.title,
-      slug: createContentDto.slug,
+      slug: createContentDto.slug || null,
       description: createContentDto.description || null,
       contentType: createContentDto.contentType,
       unlockMonth: createContentDto.unlockMonth,
@@ -267,13 +280,18 @@ export class CoursesService {
       thumbnailUrl: thumbnailUrl || null,
       durationSeconds: createContentDto.durationSeconds || null,
       sortOrder: createContentDto.sortOrder || 0,
-      hasResources: createContentDto.hasResources || false,
-      resourcesUrl: createContentDto.resourcesUrl || null,
+      availabilityType: createContentDto.availabilityType || AvailabilityType.NONE,
       isPreview: createContentDto.isPreview || false,
       course: course,
     } as DeepPartial<Content>);
 
     const savedContent = await this.contentRepository.save(content);
+
+    // Cargar recursos si existen
+    const contentWithResources = await this.contentRepository.findOne({
+      where: { id: savedContent.id },
+      relations: ['resources'],
+    });
 
     // Retornar el contenido con la información del curso
     return {
@@ -287,8 +305,15 @@ export class CoursesService {
       thumbnailUrl: savedContent.thumbnailUrl,
       durationSeconds: savedContent.durationSeconds,
       sortOrder: savedContent.sortOrder,
-      hasResources: savedContent.hasResources,
-      resourcesUrl: savedContent.resourcesUrl,
+      availabilityType: savedContent.availabilityType,
+      resources: contentWithResources?.resources?.map((resource) => ({
+        id: resource.id,
+        title: resource.title,
+        description: resource.description,
+        resourceUrl: resource.resourceUrl,
+        createdAt: resource.createdAt,
+        updatedAt: resource.updatedAt,
+      })) || [],
       isPreview: savedContent.isPreview,
       course: {
         id: course.id,
@@ -297,6 +322,62 @@ export class CoursesService {
       },
       createdAt: savedContent.createdAt,
       updatedAt: savedContent.updatedAt,
+    };
+  }
+
+  async createContentResource(
+    contentId: string,
+    createResourceDto: CreateContentResourceDto,
+    file?: Express.Multer.File,
+  ): Promise<ContentResourceResponseDto> {
+    // Validar que el contenido existe
+    const content = await this.contentRepository.findOne({
+      where: { id: contentId },
+      relations: ['course'],
+    });
+
+    if (!content) {
+      throw new NotFoundException(`Contenido con ID ${contentId} no encontrado`);
+    }
+
+    // Validar que se proporcione resourceUrl o un archivo
+    if (!createResourceDto.resourceUrl && !file) {
+      throw new BadRequestException(
+        'Debe proporcionar una URL de recurso o subir un archivo',
+      );
+    }
+
+    let resourceUrl = createResourceDto.resourceUrl;
+
+    // Si se subió un archivo, subirlo al almacenamiento
+    if (file) {
+      const folder = `courses/${content.course.id}/content/${contentId}/resources`;
+      const uploadedUrl = await this.fileService.uploadFile(
+        file,
+        folder,
+        true, // isPublic
+      );
+      resourceUrl = uploadedUrl;
+    }
+
+    // Crear el recurso
+    const resource = this.contentResourceRepository.create({
+      title: createResourceDto.title,
+      description: createResourceDto.description || null,
+      resourceUrl: resourceUrl!,
+      content: content,
+    } as DeepPartial<ContentResource>);
+
+    const savedResource = await this.contentResourceRepository.save(resource);
+
+    // Retornar el recurso
+    return {
+      id: savedResource.id,
+      title: savedResource.title,
+      description: savedResource.description,
+      resourceUrl: savedResource.resourceUrl,
+      createdAt: savedResource.createdAt,
+      updatedAt: savedResource.updatedAt,
     };
   }
 }

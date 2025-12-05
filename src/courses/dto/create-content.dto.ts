@@ -10,7 +10,7 @@ import {
   Min,
   Matches,
 } from 'class-validator';
-import { ContentType } from '../../database/entities/content.entity';
+import { ContentType, AvailabilityType } from '../../database/entities/content.entity';
 
 export class CreateContentDto {
   @IsString()
@@ -18,13 +18,14 @@ export class CreateContentDto {
   @MaxLength(300, { message: 'El título no puede exceder 300 caracteres' })
   title: string;
 
+  @IsOptional()
   @IsString()
   @MinLength(1, { message: 'El slug no puede estar vacío' })
   @MaxLength(300, { message: 'El slug no puede exceder 300 caracteres' })
   @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
     message: 'El slug debe contener solo letras minúsculas, números y guiones',
   })
-  slug: string;
+  slug?: string;
 
   @IsString()
   @IsOptional()
@@ -60,13 +61,10 @@ export class CreateContentDto {
   sortOrder?: number;
 
   @IsOptional()
-  @IsBoolean()
-  hasResources?: boolean;
-
-  @IsOptional()
-  @IsUrl({}, { message: 'La URL de recursos debe ser válida' })
-  @MaxLength(500, { message: 'La URL de recursos no puede exceder 500 caracteres' })
-  resourcesUrl?: string;
+  @IsEnum(AvailabilityType, {
+    message: 'El tipo de disponibilidad debe ser uno de: none, month, day, week',
+  })
+  availabilityType?: AvailabilityType;
 
   @IsOptional()
   @IsBoolean()

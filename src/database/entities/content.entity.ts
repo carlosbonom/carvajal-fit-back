@@ -5,11 +5,13 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  OneToMany,
   JoinColumn,
   Unique,
   Check,
 } from 'typeorm';
 import { Course } from './courses.entity';
+import { ContentResource } from './content-resources.entity';
 
 export enum ContentType {
   VIDEO = 'video',
@@ -21,10 +23,17 @@ export enum ContentType {
   TEXT = 'text',
 }
 
+export enum AvailabilityType {
+  NONE = 'none',
+  MONTH = 'month',
+  DAY = 'day',
+  WEEK = 'week',
+}
+
 @Entity('content')
-@Unique(['course', 'slug'])
 @Check(`"unlock_month" >= 1`)
 @Check(`"content_type" IN ('video', 'image', 'pdf', 'document', 'audio', 'link', 'text')`)
+@Check(`"availability_type" IN ('none', 'month', 'day', 'week')`)
 export class Content {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -36,7 +45,7 @@ export class Content {
   @Column({ type: 'varchar', nullable: false })
   title: string;
 
-  @Column({ type: 'varchar', nullable: false })
+  @Column({ type: 'varchar', nullable: true })
   slug: string;
 
   @Column({ type: 'text', nullable: true })
@@ -70,11 +79,18 @@ export class Content {
   @Column({ type: 'integer', default: 0, nullable: false, name: 'sort_order' })
   sortOrder: number;
 
-  @Column({ type: 'boolean', default: false, nullable: false, name: 'has_resources' })
-  hasResources: boolean;
+  @Column({
+    type: 'varchar',
+    nullable: false,
+    default: AvailabilityType.NONE,
+    name: 'availability_type',
+  })
+  availabilityType: AvailabilityType;
 
-  @Column({ type: 'varchar', nullable: true, name: 'resources_url' })
-  resourcesUrl: string;
+  @OneToMany(() => ContentResource, (resource) => resource.content, {
+    cascade: true,
+  })
+  resources: ContentResource[];
 
   @Column({ type: 'boolean', default: false, nullable: false, name: 'is_preview' })
   isPreview: boolean;
