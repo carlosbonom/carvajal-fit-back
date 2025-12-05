@@ -44,11 +44,13 @@ export class CoursesService {
       publishedAt: course.publishedAt,
       sortOrder: course.sortOrder,
       metadata: course.metadata,
-      creator: {
-        id: course.creator.id,
-        name: course.creator.name,
-        slug: course.creator.slug,
-      },
+      creator: course.creator
+        ? {
+            id: course.creator.id,
+            name: course.creator.name,
+            slug: course.creator.slug,
+          }
+        : null,
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,
     }));
@@ -77,11 +79,13 @@ export class CoursesService {
       publishedAt: course.publishedAt,
       sortOrder: course.sortOrder,
       metadata: course.metadata,
-      creator: {
-        id: course.creator.id,
-        name: course.creator.name,
-        slug: course.creator.slug,
-      },
+      creator: course.creator
+        ? {
+            id: course.creator.id,
+            name: course.creator.name,
+            slug: course.creator.slug,
+          }
+        : null,
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,
     };
@@ -129,15 +133,18 @@ export class CoursesService {
   }
 
   async createCourse(createCourseDto: CreateCourseDto): Promise<CourseResponseDto> {
-    // Validar que el creator existe
-    const creator = await this.creatorRepository.findOne({
-      where: { id: createCourseDto.creatorId },
-    });
+    // Validar que el creator existe si se proporciona
+    let creator: Creator | null = null;
+    if (createCourseDto.creatorId) {
+      creator = await this.creatorRepository.findOne({
+        where: { id: createCourseDto.creatorId },
+      });
 
-    if (!creator) {
-      throw new NotFoundException(
-        `Creator con ID ${createCourseDto.creatorId} no encontrado`,
-      );
+      if (!creator) {
+        throw new NotFoundException(
+          `Creator con ID ${createCourseDto.creatorId} no encontrado`,
+        );
+      }
     }
 
     // Validar que el slug no esté en uso
@@ -158,11 +165,11 @@ export class CoursesService {
       description: createCourseDto.description || null,
       thumbnailUrl: createCourseDto.thumbnailUrl || null,
       trailerUrl: createCourseDto.trailerUrl || null,
-      level: createCourseDto.level || null,
-      durationMinutes: createCourseDto.durationMinutes || null,
-      isPublished: createCourseDto.isPublished || false,
+      level: createCourseDto.level ?? null,
+      durationMinutes: createCourseDto.durationMinutes ?? null,
+      isPublished: createCourseDto.isPublished ?? false,
       publishedAt: createCourseDto.isPublished ? new Date() : null,
-      sortOrder: createCourseDto.sortOrder || 0,
+      sortOrder: createCourseDto.sortOrder ?? 0,
       creator: creator,
     } as DeepPartial<Course>);
 
@@ -182,11 +189,13 @@ export class CoursesService {
       publishedAt: savedCourse.publishedAt,
       sortOrder: savedCourse.sortOrder,
       metadata: savedCourse.metadata,
-      creator: {
-        id: creator.id,
-        name: creator.name,
-        slug: creator.slug,
-      },
+      creator: savedCourse.creator
+        ? {
+            id: savedCourse.creator.id,
+            name: savedCourse.creator.name,
+            slug: savedCourse.creator.slug,
+          }
+        : null,
       createdAt: savedCourse.createdAt,
       updatedAt: savedCourse.updatedAt,
     };

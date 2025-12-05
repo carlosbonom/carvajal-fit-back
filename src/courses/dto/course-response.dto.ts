@@ -17,7 +17,7 @@ export class CourseResponseDto {
     id: string;
     name: string;
     slug: string;
-  };
+  } | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -44,5 +44,6 @@ export class ContentResponseDto {
   createdAt: Date;
   updatedAt: Date;
 }
+
 
 

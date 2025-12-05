@@ -44,12 +44,12 @@ export class CreateCourseDto {
   @IsEnum(CourseLevel, {
     message: 'El nivel debe ser uno de: beginner, intermediate, advanced',
   })
-  level?: CourseLevel;
+  level?: CourseLevel | null;
 
   @IsOptional()
   @IsInt({ message: 'La duración debe ser un número entero' })
   @Min(0, { message: 'La duración debe ser mayor o igual a 0' })
-  durationMinutes?: number;
+  durationMinutes?: number | null;
 
   @IsOptional()
   @IsBoolean()
@@ -58,9 +58,10 @@ export class CreateCourseDto {
   @IsOptional()
   @IsInt({ message: 'El orden debe ser un número entero' })
   @Min(0, { message: 'El orden debe ser mayor o igual a 0' })
-  sortOrder?: number;
+  sortOrder?: number | null;
 
-  @IsString({ message: 'El ID del creator es requerido' })
-  creatorId: string;
+  @IsOptional()
+  @IsString({ message: 'El ID del creator debe ser una cadena válida' })
+  creatorId?: string;
 }
 

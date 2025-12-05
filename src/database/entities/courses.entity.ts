@@ -22,9 +22,9 @@ export class Course {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => Creator, { nullable: false, onDelete: 'RESTRICT' })
+  @ManyToOne(() => Creator, { nullable: true, onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'creator_id' })
-  creator: Creator;
+  creator: Creator | null;
 
   @Column({ type: 'varchar', nullable: false })
   title: string;
