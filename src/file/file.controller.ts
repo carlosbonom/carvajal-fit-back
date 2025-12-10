@@ -1,9 +1,10 @@
-import { Body, Controller, Post, UploadedFile, UseInterceptors, ParseFilePipe, MaxFileSizeValidator, FileTypeValidator } from "@nestjs/common";
+import { Body, Controller, Post, UploadedFile, UseInterceptors, ParseFilePipe, MaxFileSizeValidator } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { diskStorage } from "multer";
 import { join } from "path";
 import { existsSync, mkdirSync, unlink } from "fs";
 import { FileService } from "./file.service";
+import { CustomFileTypeValidator } from "./validators/file-type.validator";
 
 @Controller('file')
 export class FileController {
@@ -35,7 +36,7 @@ export class FileController {
             new ParseFilePipe({
                 validators: [
                     new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 1024 }), // 1GB
-                    new FileTypeValidator({ 
+                    new CustomFileTypeValidator({ 
                         fileType: /^(video|image|application|audio|text)\// 
                     }),
                 ],
