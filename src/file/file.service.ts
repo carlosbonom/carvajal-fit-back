@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { HeadObjectCommand, ObjectCannedACL, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { ConfigService } from "@nestjs/config";
 import { Readable } from "stream";
+import { createReadStream } from "fs";
 
 @Injectable()
 export class FileService {
@@ -34,7 +35,7 @@ export class FileService {
     }
 
     async uploadFile(
-        file: any | { buffer: Buffer; originalname: string; mimetype: string } | { stream: Readable; originalname: string; mimetype: string },
+        file: any | { buffer: Buffer; originalname: string; mimetype: string } | { stream: Readable; originalname: string; mimetype: string } | { path: string; originalname: string; mimetype: string },
         folder: string = 'uploads',
         isPublic: boolean = true,
         isUnique: boolean = false
@@ -56,10 +57,15 @@ export class FileService {
             const key =  isUnique ? folder : `${folder}/${Date.now()}-${file.originalname}`;
             
             let body: Buffer | Readable;
-            if ('stream' in file) {
+            // Si el archivo tiene path (diskStorage), leer desde disco
+            if ('path' in file && file.path) {
+              body = createReadStream(file.path);
+            } else if ('stream' in file) {
               body = file.stream;
-            } else {
+            } else if ('buffer' in file && file.buffer) {
               body = file.buffer;
+            } else {
+              throw new Error('No se pudo obtener el contenido del archivo');
             }
             
             const command = new PutObjectCommand({
