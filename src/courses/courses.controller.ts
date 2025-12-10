@@ -23,11 +23,21 @@ import { CreateContentResourceDto } from './dto/create-content-resource.dto';
 import { UpdateContentStatusDto } from './dto/update-content-status.dto';
 import { UpdateContentDto } from './dto/update-content.dto';
 import { UpdateContentOrderDto } from './dto/update-content-order.dto';
-import { CourseResponseDto, ContentResponseDto, ContentResourceResponseDto } from './dto/course-response.dto';
+import { CourseResponseDto, ContentResponseDto, ContentResourceResponseDto, CourseWithContentResponseDto } from './dto/course-response.dto';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { User } from '../database/entities/users.entity';
 
 @Controller('courses')
 export class CoursesController {
   constructor(private readonly coursesService: CoursesService) {}
+
+  @Get('subscription')
+  @UseGuards(JwtAuthGuard)
+  async getSubscriptionCourses(
+    @CurrentUser() user: User,
+  ): Promise<CourseWithContentResponseDto[]> {
+    return this.coursesService.getSubscriptionCourses(user);
+  }
 
   @Get()
   @UseGuards(JwtAuthGuard)

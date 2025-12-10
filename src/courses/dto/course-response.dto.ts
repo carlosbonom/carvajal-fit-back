@@ -56,5 +56,9 @@ export class ContentResponseDto {
   updatedAt: Date;
 }
 
+export class CourseWithContentResponseDto extends CourseResponseDto {
+  content: ContentResponseDto[];
+}
+
 
 

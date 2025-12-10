@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
@@ -9,11 +10,13 @@ import { Course } from '../database/entities/courses.entity';
 import { Content, ContentType, AvailabilityType, UnlockType } from '../database/entities/content.entity';
 import { ContentResource } from '../database/entities/content-resources.entity';
 import { Creator } from '../database/entities/creators.entity';
+import { UserSubscription, SubscriptionStatus } from '../database/entities/user-subscriptions.entity';
+import { User, UserRole } from '../database/entities/users.entity';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { CreateContentDto } from './dto/create-content.dto';
 import { CreateContentResourceDto } from './dto/create-content-resource.dto';
 import { UpdateContentDto } from './dto/update-content.dto';
-import { CourseResponseDto, ContentResponseDto, ContentResourceResponseDto } from './dto/course-response.dto';
+import { CourseResponseDto, ContentResponseDto, ContentResourceResponseDto, CourseWithContentResponseDto } from './dto/course-response.dto';
 import { FileService } from '../file/file.service';
 
 @Injectable()
@@ -27,6 +30,8 @@ export class CoursesService {
     private readonly contentResourceRepository: Repository<ContentResource>,
     @InjectRepository(Creator)
     private readonly creatorRepository: Repository<Creator>,
+    @InjectRepository(UserSubscription)
+    private readonly userSubscriptionRepository: Repository<UserSubscription>,
     private readonly fileService: FileService,
   ) {}
 
@@ -587,6 +592,160 @@ export class CoursesService {
       createdAt: updatedContent.createdAt,
       updatedAt: updatedContent.updatedAt,
     };
+  }
+
+  async getSubscriptionCourses(user: User): Promise<CourseWithContentResponseDto[]> {
+    // Si el usuario es admin o support, no necesita suscripción activa pero respeta isPublished e isActive
+    const isAdmin = user.role === UserRole.ADMIN || user.role === UserRole.SUPPORT;
+    
+    let monthsSinceStart = 0;
+
+    // Solo verificar suscripción si no es admin
+    if (!isAdmin) {
+      const subscription = await this.userSubscriptionRepository.findOne({
+        where: {
+          user: { id: user.id },
+          status: SubscriptionStatus.ACTIVE,
+        },
+      });
+
+      if (!subscription) {
+        throw new ForbiddenException('No tienes una suscripción activa');
+      }
+
+      // Calcular el mes de suscripción (meses desde startedAt)
+      const now = new Date();
+      monthsSinceStart = this.calculateMonthsBetween(subscription.startedAt, now);
+    }
+
+    // Todos (incluidos admins) ven solo cursos publicados
+    const courses = await this.courseRepository.find({
+      where: { isPublished: true },
+      relations: ['creator'],
+      order: { sortOrder: 'ASC', createdAt: 'DESC' },
+    });
+
+    // Para cada curso, obtener su contenido activo (todos respetan isActive)
+    const coursesWithContent = await Promise.all(
+      courses.map(async (course) => {
+        const contents = await this.contentRepository.find({
+          where: {
+            course: { id: course.id },
+            isActive: true,
+          },
+          relations: ['resources'],
+          order: { sortOrder: 'ASC' },
+        });
+
+        // Si es admin, devolver todo sin filtrar por desbloqueo. Si no, filtrar según el desbloqueo
+        const availableContents = isAdmin 
+          ? contents 
+          : contents.filter((content) => {
+              return this.isContentUnlocked(content, monthsSinceStart);
+            });
+
+        return {
+          id: course.id,
+          title: course.title,
+          slug: course.slug,
+          description: course.description,
+          thumbnailUrl: course.thumbnailUrl,
+          trailerUrl: course.trailerUrl,
+          level: course.level,
+          durationMinutes: course.durationMinutes,
+          isPublished: course.isPublished,
+          publishedAt: course.publishedAt,
+          sortOrder: course.sortOrder,
+          metadata: course.metadata,
+          creator: course.creator
+            ? {
+                id: course.creator.id,
+                name: course.creator.name,
+                slug: course.creator.slug,
+              }
+            : null,
+          createdAt: course.createdAt,
+          updatedAt: course.updatedAt,
+          // Agregar contenido como propiedad adicional (no está en CourseResponseDto estándar)
+          content: availableContents.map((content) => ({
+            id: content.id,
+            title: content.title,
+            slug: content.slug,
+            description: content.description,
+            contentType: content.contentType,
+            unlockValue: content.unlockValue,
+            unlockType: content.unlockType,
+            contentUrl: content.contentUrl,
+            thumbnailUrl: content.thumbnailUrl,
+            durationSeconds: content.durationSeconds,
+            sortOrder: content.sortOrder,
+            availabilityType: content.availabilityType,
+            resources: content.resources?.map((resource) => ({
+              id: resource.id,
+              title: resource.title,
+              description: resource.description,
+              resourceUrl: resource.resourceUrl,
+              createdAt: resource.createdAt,
+              updatedAt: resource.updatedAt,
+            })) || [],
+            isPreview: content.isPreview,
+            isActive: content.isActive,
+            course: {
+              id: course.id,
+              title: course.title,
+              slug: course.slug,
+            },
+            createdAt: content.createdAt,
+            updatedAt: content.updatedAt,
+          })),
+        };
+      }),
+    );
+
+    return coursesWithContent as CourseWithContentResponseDto[];
+  }
+
+  private isContentUnlocked(content: Content, monthsSinceStart: number): boolean {
+    // Si el tipo de desbloqueo es IMMEDIATE, siempre está disponible
+    if (content.unlockType === UnlockType.IMMEDIATE) {
+      return true;
+    }
+
+    // Calcular el valor de desbloqueo según el tipo
+    let unlockThreshold = 0;
+
+    switch (content.unlockType) {
+      case UnlockType.DAY:
+        // Convertir días a meses aproximados (30 días = 1 mes)
+        unlockThreshold = Math.floor(content.unlockValue / 30);
+        break;
+      case UnlockType.WEEK:
+        // Convertir semanas a meses aproximados (4 semanas = 1 mes)
+        unlockThreshold = Math.floor(content.unlockValue / 4);
+        break;
+      case UnlockType.MONTH:
+        unlockThreshold = content.unlockValue;
+        break;
+      case UnlockType.YEAR:
+        // Convertir años a meses
+        unlockThreshold = content.unlockValue * 12;
+        break;
+      default:
+        return true; // Por defecto, disponible
+    }
+
+    // El contenido está desbloqueado si el mes de suscripción es >= al threshold
+    return monthsSinceStart >= unlockThreshold;
+  }
+
+  private calculateMonthsBetween(startDate: Date, endDate: Date): number {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    const yearsDiff = end.getFullYear() - start.getFullYear();
+    const monthsDiff = end.getMonth() - start.getMonth();
+    
+    return yearsDiff * 12 + monthsDiff;
   }
 }
 

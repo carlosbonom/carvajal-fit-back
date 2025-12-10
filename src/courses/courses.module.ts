@@ -6,11 +6,12 @@ import { Course } from '../database/entities/courses.entity';
 import { Content } from '../database/entities/content.entity';
 import { ContentResource } from '../database/entities/content-resources.entity';
 import { Creator } from '../database/entities/creators.entity';
+import { UserSubscription, SubscriptionStatus } from '../database/entities/user-subscriptions.entity';
 import { FileModule } from '../file/file.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Course, Content, ContentResource, Creator]),
+    TypeOrmModule.forFeature([Course, Content, ContentResource, Creator, UserSubscription]),
     FileModule,
   ],
   controllers: [CoursesController],
