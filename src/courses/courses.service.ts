@@ -12,6 +12,7 @@ import { Creator } from '../database/entities/creators.entity';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { CreateContentDto } from './dto/create-content.dto';
 import { CreateContentResourceDto } from './dto/create-content-resource.dto';
+import { UpdateContentDto } from './dto/update-content.dto';
 import { CourseResponseDto, ContentResponseDto, ContentResourceResponseDto } from './dto/course-response.dto';
 import { FileService } from '../file/file.service';
 
@@ -383,6 +384,104 @@ export class CoursesService {
       resourceUrl: savedResource.resourceUrl,
       createdAt: savedResource.createdAt,
       updatedAt: savedResource.updatedAt,
+    };
+  }
+
+  async updateContent(
+    contentId: string,
+    updateContentDto: UpdateContentDto,
+    file?: Express.Multer.File,
+  ): Promise<ContentResponseDto> {
+    // Validar que el contenido existe
+    const content = await this.contentRepository.findOne({
+      where: { id: contentId },
+      relations: ['course', 'resources'],
+    });
+
+    if (!content) {
+      throw new NotFoundException(`Contenido con ID ${contentId} no encontrado`);
+    }
+
+    // Validar que el slug no esté en uso en este curso (solo si se está cambiando)
+    if (updateContentDto.slug && updateContentDto.slug !== content.slug) {
+      const existingContent = await this.contentRepository.findOne({
+        where: {
+          course: { id: content.course.id },
+          slug: updateContentDto.slug,
+        },
+      });
+
+      if (existingContent) {
+        throw new BadRequestException(
+          `Ya existe contenido con el slug "${updateContentDto.slug}" en este curso`,
+        );
+      }
+    }
+
+    // Si se subió un archivo, subirlo al almacenamiento
+    if (file) {
+      const folder = `courses/${content.course.id}/content`;
+      const uploadedUrl = await this.fileService.uploadFile(
+        file,
+        folder,
+        true, // isPublic
+      );
+      updateContentDto.contentUrl = uploadedUrl;
+
+      // Si no se proporcionó thumbnailUrl y el archivo es una imagen, usar la misma URL
+      if (!updateContentDto.thumbnailUrl && (updateContentDto.contentType === ContentType.IMAGE || content.contentType === ContentType.IMAGE)) {
+        updateContentDto.thumbnailUrl = uploadedUrl;
+      }
+    }
+
+    // Actualizar solo los campos proporcionados
+    if (updateContentDto.title !== undefined) content.title = updateContentDto.title;
+    if (updateContentDto.slug !== undefined) content.slug = updateContentDto.slug;
+    if (updateContentDto.description !== undefined) content.description = updateContentDto.description;
+    if (updateContentDto.contentType !== undefined) content.contentType = updateContentDto.contentType;
+    if (updateContentDto.unlockValue !== undefined) content.unlockValue = updateContentDto.unlockValue;
+    if (updateContentDto.unlockType !== undefined) content.unlockType = updateContentDto.unlockType;
+    if (updateContentDto.contentUrl !== undefined) content.contentUrl = updateContentDto.contentUrl;
+    if (updateContentDto.thumbnailUrl !== undefined) content.thumbnailUrl = updateContentDto.thumbnailUrl;
+    if (updateContentDto.durationSeconds !== undefined) content.durationSeconds = updateContentDto.durationSeconds;
+    if (updateContentDto.sortOrder !== undefined) content.sortOrder = updateContentDto.sortOrder;
+    if (updateContentDto.availabilityType !== undefined) content.availabilityType = updateContentDto.availabilityType;
+    if (updateContentDto.isPreview !== undefined) content.isPreview = updateContentDto.isPreview;
+    if (updateContentDto.isActive !== undefined) content.isActive = updateContentDto.isActive;
+
+    const updatedContent = await this.contentRepository.save(content);
+
+    // Retornar el contenido actualizado
+    return {
+      id: updatedContent.id,
+      title: updatedContent.title,
+      slug: updatedContent.slug,
+      description: updatedContent.description,
+      contentType: updatedContent.contentType,
+      unlockValue: updatedContent.unlockValue,
+      unlockType: updatedContent.unlockType,
+      contentUrl: updatedContent.contentUrl,
+      thumbnailUrl: updatedContent.thumbnailUrl,
+      durationSeconds: updatedContent.durationSeconds,
+      sortOrder: updatedContent.sortOrder,
+      availabilityType: updatedContent.availabilityType,
+      resources: updatedContent.resources?.map((resource) => ({
+        id: resource.id,
+        title: resource.title,
+        description: resource.description,
+        resourceUrl: resource.resourceUrl,
+        createdAt: resource.createdAt,
+        updatedAt: resource.updatedAt,
+      })) || [],
+      isPreview: updatedContent.isPreview,
+      isActive: updatedContent.isActive,
+      course: {
+        id: updatedContent.course.id,
+        title: updatedContent.course.title,
+        slug: updatedContent.course.slug,
+      },
+      createdAt: updatedContent.createdAt,
+      updatedAt: updatedContent.updatedAt,
     };
   }
 

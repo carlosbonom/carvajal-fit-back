@@ -21,6 +21,7 @@ import { CreateCourseDto } from './dto/create-course.dto';
 import { CreateContentDto } from './dto/create-content.dto';
 import { CreateContentResourceDto } from './dto/create-content-resource.dto';
 import { UpdateContentStatusDto } from './dto/update-content-status.dto';
+import { UpdateContentDto } from './dto/update-content.dto';
 import { CourseResponseDto, ContentResponseDto, ContentResourceResponseDto } from './dto/course-response.dto';
 
 @Controller('courses')
@@ -77,6 +78,29 @@ export class CoursesController {
     file?: Express.Multer.File,
   ): Promise<ContentResponseDto> {
     return this.coursesService.createContent(courseId, createContentDto, file);
+  }
+
+  @Patch('content/:contentId')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  @HttpCode(HttpStatus.OK)
+  async updateContent(
+    @Param('contentId') contentId: string,
+    @Body() updateContentDto: UpdateContentDto,
+    @UploadedFile(
+      new ParseFilePipe({
+        fileIsRequired: false,
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 100 * 1024 * 1024 }), // 100MB
+          new FileTypeValidator({ 
+            fileType: /^(video|image|application|audio|text)\// 
+          }),
+        ],
+      }),
+    )
+    file?: Express.Multer.File,
+  ): Promise<ContentResponseDto> {
+    return this.coursesService.updateContent(contentId, updateContentDto, file);
   }
 
   @Patch('content/:contentId/status')
