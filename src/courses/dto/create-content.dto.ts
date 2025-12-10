@@ -10,7 +10,7 @@ import {
   Min,
   Matches,
 } from 'class-validator';
-import { ContentType, AvailabilityType } from '../../database/entities/content.entity';
+import { ContentType, AvailabilityType, UnlockType } from '../../database/entities/content.entity';
 
 export class CreateContentDto {
   @IsString()
@@ -36,9 +36,15 @@ export class CreateContentDto {
   })
   contentType: ContentType;
 
-  @IsInt({ message: 'El mes de desbloqueo debe ser un número entero' })
-  @Min(1, { message: 'El mes de desbloqueo debe ser mayor o igual a 1' })
-  unlockMonth: number;
+  @IsInt({ message: 'El valor de desbloqueo debe ser un número entero' })
+  @Min(0, { message: 'El valor de desbloqueo debe ser mayor o igual a 0' })
+  unlockValue: number;
+
+  @IsOptional()
+  @IsEnum(UnlockType, {
+    message: 'El tipo de desbloqueo debe ser uno de: immediate, day, week, month, year',
+  })
+  unlockType?: UnlockType;
 
   @IsOptional()
   @IsUrl({}, { message: 'La URL del contenido debe ser válida' })

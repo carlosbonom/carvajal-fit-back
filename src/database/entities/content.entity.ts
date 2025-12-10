@@ -30,10 +30,19 @@ export enum AvailabilityType {
   WEEK = 'week',
 }
 
+export enum UnlockType {
+  IMMEDIATE = 'immediate',
+  DAY = 'day',
+  WEEK = 'week',
+  MONTH = 'month',
+  YEAR = 'year',
+}
+
 @Entity('content')
-@Check(`"unlock_month" >= 1`)
+@Check(`"unlock_value" >= 0`)
 @Check(`"content_type" IN ('video', 'image', 'pdf', 'document', 'audio', 'link', 'text')`)
 @Check(`"availability_type" IN ('none', 'month', 'day', 'week')`)
+@Check(`"unlock_type" IN ('immediate', 'day', 'week', 'month', 'year')`)
 export class Content {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -62,10 +71,18 @@ export class Content {
   @Column({
     type: 'integer',
     nullable: false,
-    default: 1,
-    name: 'unlock_month',
+    default: 0,
+    name: 'unlock_value',
   })
-  unlockMonth: number;
+  unlockValue: number;
+
+  @Column({
+    type: 'varchar',
+    nullable: false,
+    default: UnlockType.IMMEDIATE,
+    name: 'unlock_type',
+  })
+  unlockType: UnlockType;
 
   @Column({ type: 'varchar', nullable: false, name: 'content_url' })
   contentUrl: string;

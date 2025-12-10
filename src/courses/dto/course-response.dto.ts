@@ -37,7 +37,8 @@ export class ContentResponseDto {
   slug: string | null;
   description: string | null;
   contentType: string;
-  unlockMonth: number;
+  unlockValue: number;
+  unlockType: string;
   contentUrl: string;
   thumbnailUrl: string | null;
   durationSeconds: number | null;

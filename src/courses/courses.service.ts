@@ -6,7 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
 import { Course } from '../database/entities/courses.entity';
-import { Content, ContentType, AvailabilityType } from '../database/entities/content.entity';
+import { Content, ContentType, AvailabilityType, UnlockType } from '../database/entities/content.entity';
 import { ContentResource } from '../database/entities/content-resources.entity';
 import { Creator } from '../database/entities/creators.entity';
 import { CreateCourseDto } from './dto/create-course.dto';
@@ -118,7 +118,8 @@ export class CoursesService {
       slug: content.slug,
       description: content.description,
       contentType: content.contentType,
-      unlockMonth: content.unlockMonth,
+      unlockValue: content.unlockValue,
+      unlockType: content.unlockType,
       contentUrl: content.contentUrl,
       thumbnailUrl: content.thumbnailUrl,
       durationSeconds: content.durationSeconds,
@@ -275,7 +276,8 @@ export class CoursesService {
       slug: createContentDto.slug || null,
       description: createContentDto.description || null,
       contentType: createContentDto.contentType,
-      unlockMonth: createContentDto.unlockMonth,
+      unlockValue: createContentDto.unlockValue,
+      unlockType: createContentDto.unlockType || UnlockType.IMMEDIATE,
       contentUrl: contentUrl!,
       thumbnailUrl: thumbnailUrl || null,
       durationSeconds: createContentDto.durationSeconds || null,
@@ -300,7 +302,8 @@ export class CoursesService {
       slug: savedContent.slug,
       description: savedContent.description,
       contentType: savedContent.contentType,
-      unlockMonth: savedContent.unlockMonth,
+      unlockValue: savedContent.unlockValue,
+      unlockType: savedContent.unlockType,
       contentUrl: savedContent.contentUrl,
       thumbnailUrl: savedContent.thumbnailUrl,
       durationSeconds: savedContent.durationSeconds,
