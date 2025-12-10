@@ -22,6 +22,7 @@ import { CreateContentDto } from './dto/create-content.dto';
 import { CreateContentResourceDto } from './dto/create-content-resource.dto';
 import { UpdateContentStatusDto } from './dto/update-content-status.dto';
 import { UpdateContentDto } from './dto/update-content.dto';
+import { UpdateContentOrderDto } from './dto/update-content-order.dto';
 import { CourseResponseDto, ContentResponseDto, ContentResourceResponseDto } from './dto/course-response.dto';
 
 @Controller('courses')
@@ -101,6 +102,16 @@ export class CoursesController {
     file?: Express.Multer.File,
   ): Promise<ContentResponseDto> {
     return this.coursesService.updateContent(contentId, updateContentDto, file);
+  }
+
+  @Patch('content/:contentId/order')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async updateContentOrder(
+    @Param('contentId') contentId: string,
+    @Body() updateOrderDto: UpdateContentOrderDto,
+  ): Promise<ContentResponseDto> {
+    return this.coursesService.updateContentOrder(contentId, updateOrderDto.sortOrder);
   }
 
   @Patch('content/:contentId/status')

@@ -485,6 +485,58 @@ export class CoursesService {
     };
   }
 
+  async updateContentOrder(
+    contentId: string,
+    sortOrder: number,
+  ): Promise<ContentResponseDto> {
+    // Validar que el contenido existe
+    const content = await this.contentRepository.findOne({
+      where: { id: contentId },
+      relations: ['course', 'resources'],
+    });
+
+    if (!content) {
+      throw new NotFoundException(`Contenido con ID ${contentId} no encontrado`);
+    }
+
+    // Actualizar el orden
+    content.sortOrder = sortOrder;
+    const updatedContent = await this.contentRepository.save(content);
+
+    // Retornar el contenido actualizado
+    return {
+      id: updatedContent.id,
+      title: updatedContent.title,
+      slug: updatedContent.slug,
+      description: updatedContent.description,
+      contentType: updatedContent.contentType,
+      unlockValue: updatedContent.unlockValue,
+      unlockType: updatedContent.unlockType,
+      contentUrl: updatedContent.contentUrl,
+      thumbnailUrl: updatedContent.thumbnailUrl,
+      durationSeconds: updatedContent.durationSeconds,
+      sortOrder: updatedContent.sortOrder,
+      availabilityType: updatedContent.availabilityType,
+      resources: updatedContent.resources?.map((resource) => ({
+        id: resource.id,
+        title: resource.title,
+        description: resource.description,
+        resourceUrl: resource.resourceUrl,
+        createdAt: resource.createdAt,
+        updatedAt: resource.updatedAt,
+      })) || [],
+      isPreview: updatedContent.isPreview,
+      isActive: updatedContent.isActive,
+      course: {
+        id: updatedContent.course.id,
+        title: updatedContent.course.title,
+        slug: updatedContent.course.slug,
+      },
+      createdAt: updatedContent.createdAt,
+      updatedAt: updatedContent.updatedAt,
+    };
+  }
+
   async updateContentStatus(
     contentId: string,
     isActive: boolean,
