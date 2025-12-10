@@ -112,6 +112,9 @@ export class Content {
   @Column({ type: 'boolean', default: false, nullable: false, name: 'is_preview' })
   isPreview: boolean;
 
+  @Column({ type: 'boolean', default: true, nullable: false, name: 'is_active' })
+  isActive: boolean;
+
   @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
   createdAt: Date;
 

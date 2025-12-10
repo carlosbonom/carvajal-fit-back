@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   Param,
   HttpCode,
@@ -19,6 +20,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { CreateContentDto } from './dto/create-content.dto';
 import { CreateContentResourceDto } from './dto/create-content-resource.dto';
+import { UpdateContentStatusDto } from './dto/update-content-status.dto';
 import { CourseResponseDto, ContentResponseDto, ContentResourceResponseDto } from './dto/course-response.dto';
 
 @Controller('courses')
@@ -75,6 +77,16 @@ export class CoursesController {
     file?: Express.Multer.File,
   ): Promise<ContentResponseDto> {
     return this.coursesService.createContent(courseId, createContentDto, file);
+  }
+
+  @Patch('content/:contentId/status')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async updateContentStatus(
+    @Param('contentId') contentId: string,
+    @Body() updateStatusDto: UpdateContentStatusDto,
+  ): Promise<ContentResponseDto> {
+    return this.coursesService.updateContentStatus(contentId, updateStatusDto.isActive);
   }
 
   @Post('content/:contentId/resources')

@@ -46,6 +46,7 @@ export class ContentResponseDto {
   availabilityType: string;
   resources: ContentResourceResponseDto[];
   isPreview: boolean;
+  isActive: boolean;
   course: {
     id: string;
     title: string;
