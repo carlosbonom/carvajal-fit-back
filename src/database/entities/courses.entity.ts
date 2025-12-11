@@ -46,16 +46,16 @@ export class Course {
     length: 20,
     nullable: true,
   })
-  level: CourseLevel;
+  level: CourseLevel | null;
 
   @Column({ type: 'integer', nullable: true, name: 'duration_minutes' })
-  durationMinutes: number;
+  durationMinutes: number | null;
 
   @Column({ type: 'boolean', default: false, nullable: false, name: 'is_published' })
   isPublished: boolean;
 
   @Column({ type: 'timestamptz', nullable: true, name: 'published_at' })
-  publishedAt: Date;
+  publishedAt: Date | null;
 
   @Column({ type: 'integer', default: 0, nullable: false, name: 'sort_order' })
   sortOrder: number;

@@ -272,9 +272,9 @@ export class CoursesService {
     if (updateCourseDto.description !== undefined) course.description = updateCourseDto.description;
     if (updateCourseDto.thumbnailUrl !== undefined) course.thumbnailUrl = updateCourseDto.thumbnailUrl;
     if (updateCourseDto.trailerUrl !== undefined) course.trailerUrl = updateCourseDto.trailerUrl;
-    if (updateCourseDto.level !== undefined) course.level = updateCourseDto.level;
-    if (updateCourseDto.durationMinutes !== undefined) course.durationMinutes = updateCourseDto.durationMinutes;
-    if (updateCourseDto.sortOrder !== undefined) course.sortOrder = updateCourseDto.sortOrder;
+    if (updateCourseDto.level !== undefined) course.level = updateCourseDto.level ?? null;
+    if (updateCourseDto.durationMinutes !== undefined) course.durationMinutes = updateCourseDto.durationMinutes ?? null;
+    if (updateCourseDto.sortOrder !== undefined) course.sortOrder = updateCourseDto.sortOrder ?? 0;
     if (updateCourseDto.metadata !== undefined) course.metadata = updateCourseDto.metadata;
     
     // Manejar isPublished y publishedAt
