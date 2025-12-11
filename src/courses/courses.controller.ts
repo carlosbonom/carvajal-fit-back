@@ -20,6 +20,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { CreateContentDto } from './dto/create-content.dto';
 import { CreateContentResourceDto } from './dto/create-content-resource.dto';
+import { UpdateCourseDto } from './dto/update-course.dto';
 import { UpdateContentStatusDto } from './dto/update-content-status.dto';
 import { UpdateContentDto } from './dto/update-content.dto';
 import { UpdateContentOrderDto } from './dto/update-content-order.dto';
@@ -58,6 +59,16 @@ export class CoursesController {
   @UseGuards(JwtAuthGuard)
   async getCourse(@Param('id') id: string): Promise<CourseResponseDto> {
     return this.coursesService.getCourseById(id);
+  }
+
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async updateCourse(
+    @Param('id') id: string,
+    @Body() updateCourseDto: UpdateCourseDto,
+  ): Promise<CourseResponseDto> {
+    return this.coursesService.updateCourse(id, updateCourseDto);
   }
 
   @Get(':id/content')

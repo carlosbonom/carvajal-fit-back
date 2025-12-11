@@ -15,6 +15,7 @@ import { User, UserRole } from '../database/entities/users.entity';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { CreateContentDto } from './dto/create-content.dto';
 import { CreateContentResourceDto } from './dto/create-content-resource.dto';
+import { UpdateCourseDto } from './dto/update-course.dto';
 import { UpdateContentDto } from './dto/update-content.dto';
 import { CourseResponseDto, ContentResponseDto, ContentResourceResponseDto, CourseWithContentResponseDto } from './dto/course-response.dto';
 import { FileService } from '../file/file.service';
@@ -217,6 +218,103 @@ export class CoursesService {
         : null,
       createdAt: savedCourse.createdAt,
       updatedAt: savedCourse.updatedAt,
+    };
+  }
+
+  async updateCourse(
+    id: string,
+    updateCourseDto: UpdateCourseDto,
+  ): Promise<CourseResponseDto> {
+    // Validar que el curso existe
+    const course = await this.courseRepository.findOne({
+      where: { id },
+      relations: ['creator'],
+    });
+
+    if (!course) {
+      throw new NotFoundException(`Curso con ID ${id} no encontrado`);
+    }
+
+    // Validar que el slug no esté en uso (solo si se está cambiando)
+    if (updateCourseDto.slug && updateCourseDto.slug !== course.slug) {
+      const existingCourse = await this.courseRepository.findOne({
+        where: { slug: updateCourseDto.slug },
+      });
+
+      if (existingCourse) {
+        throw new BadRequestException(
+          `Ya existe un curso con el slug "${updateCourseDto.slug}"`,
+        );
+      }
+    }
+
+    // Validar que el creator existe si se proporciona
+    if (updateCourseDto.creatorId !== undefined) {
+      if (updateCourseDto.creatorId) {
+        const creator = await this.creatorRepository.findOne({
+          where: { id: updateCourseDto.creatorId },
+        });
+
+        if (!creator) {
+          throw new NotFoundException(
+            `Creator con ID ${updateCourseDto.creatorId} no encontrado`,
+          );
+        }
+        course.creator = creator;
+      } else {
+        course.creator = null;
+      }
+    }
+
+    // Actualizar solo los campos proporcionados
+    if (updateCourseDto.title !== undefined) course.title = updateCourseDto.title;
+    if (updateCourseDto.slug !== undefined) course.slug = updateCourseDto.slug;
+    if (updateCourseDto.description !== undefined) course.description = updateCourseDto.description;
+    if (updateCourseDto.thumbnailUrl !== undefined) course.thumbnailUrl = updateCourseDto.thumbnailUrl;
+    if (updateCourseDto.trailerUrl !== undefined) course.trailerUrl = updateCourseDto.trailerUrl;
+    if (updateCourseDto.level !== undefined) course.level = updateCourseDto.level;
+    if (updateCourseDto.durationMinutes !== undefined) course.durationMinutes = updateCourseDto.durationMinutes;
+    if (updateCourseDto.sortOrder !== undefined) course.sortOrder = updateCourseDto.sortOrder;
+    if (updateCourseDto.metadata !== undefined) course.metadata = updateCourseDto.metadata;
+    
+    // Manejar isPublished y publishedAt
+    if (updateCourseDto.isPublished !== undefined) {
+      course.isPublished = updateCourseDto.isPublished;
+      // Si se está publicando por primera vez, establecer publishedAt
+      if (updateCourseDto.isPublished && !course.publishedAt) {
+        course.publishedAt = new Date();
+      }
+      // Si se está despublicando, limpiar publishedAt
+      if (!updateCourseDto.isPublished) {
+        course.publishedAt = null;
+      }
+    }
+
+    const updatedCourse = await this.courseRepository.save(course);
+
+    // Retornar el curso actualizado
+    return {
+      id: updatedCourse.id,
+      title: updatedCourse.title,
+      slug: updatedCourse.slug,
+      description: updatedCourse.description,
+      thumbnailUrl: updatedCourse.thumbnailUrl,
+      trailerUrl: updatedCourse.trailerUrl,
+      level: updatedCourse.level,
+      durationMinutes: updatedCourse.durationMinutes,
+      isPublished: updatedCourse.isPublished,
+      publishedAt: updatedCourse.publishedAt,
+      sortOrder: updatedCourse.sortOrder,
+      metadata: updatedCourse.metadata,
+      creator: updatedCourse.creator
+        ? {
+            id: updatedCourse.creator.id,
+            name: updatedCourse.creator.name,
+            slug: updatedCourse.creator.slug,
+          }
+        : null,
+      createdAt: updatedCourse.createdAt,
+      updatedAt: updatedCourse.updatedAt,
     };
   }
 
