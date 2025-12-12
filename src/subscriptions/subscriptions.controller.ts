@@ -15,7 +15,7 @@ import type { RawBodyRequest } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
 import { Public } from '../auth/decorators/public.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { NonAdminGuard } from '../auth/guards/non-admin.guard';
+import { AdminGuard } from '../auth/guards/non-admin.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../database/entities/users.entity';
 import { SubscriptionPlansResponseDto, SubscriptionPlanDto } from './dto/subscription-plan-response.dto';
@@ -110,7 +110,7 @@ export class SubscriptionsController {
   }
 
   @Get('members')
-  @UseGuards(JwtAuthGuard, NonAdminGuard)
+  @UseGuards(JwtAuthGuard, AdminGuard)
   async getMembers(@Query() query: GetMembersQueryDto): Promise<MembersResponseDto> {
     return this.subscriptionsService.getMembers(query);
   }

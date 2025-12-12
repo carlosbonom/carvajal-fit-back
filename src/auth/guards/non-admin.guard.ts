@@ -2,7 +2,7 @@ import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@
 import { UserRole } from '../../database/entities/users.entity';
 
 @Injectable()
-export class NonAdminGuard implements CanActivate {
+export class AdminGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
@@ -11,8 +11,8 @@ export class NonAdminGuard implements CanActivate {
       throw new ForbiddenException('Usuario no autenticado');
     }
 
-    if (user.role === UserRole.ADMIN) {
-      throw new ForbiddenException('Los administradores no pueden acceder a este endpoint');
+    if (user.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Solo los administradores pueden acceder a este endpoint');
     }
 
     return true;
