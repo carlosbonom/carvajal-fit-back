@@ -9,11 +9,13 @@ import {
   HttpStatus,
   UseGuards,
   Req,
+  Query,
 } from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
 import { Public } from '../auth/decorators/public.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { NonAdminGuard } from '../auth/guards/non-admin.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../database/entities/users.entity';
 import { SubscriptionPlansResponseDto, SubscriptionPlanDto } from './dto/subscription-plan-response.dto';
@@ -24,6 +26,8 @@ import { WebhookNotificationDto } from './dto/webhook-notification.dto';
 import { UserSubscriptionDto } from './dto/user-subscription-response.dto';
 import { CancelSubscriptionDto } from './dto/cancel-subscription.dto';
 import { SubscriptionPayment } from '../database/entities/subscription-payments.entity';
+import { GetMembersQueryDto } from './dto/get-members-query.dto';
+import { MembersResponseDto } from './dto/members-response.dto';
 
 @Controller('subscriptions')
 export class SubscriptionsController {
@@ -103,6 +107,12 @@ export class SubscriptionsController {
   async getMyPayments(@CurrentUser() user: User): Promise<{ payments: SubscriptionPayment[] }> {
     const payments = await this.subscriptionsService.getSubscriptionPayments(user.id);
     return { payments };
+  }
+
+  @Get('members')
+  @UseGuards(JwtAuthGuard, NonAdminGuard)
+  async getMembers(@Query() query: GetMembersQueryDto): Promise<MembersResponseDto> {
+    return this.subscriptionsService.getMembers(query);
   }
 }
 

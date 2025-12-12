@@ -18,6 +18,10 @@ import { CancelSubscriptionDto } from './dto/cancel-subscription.dto';
 import { UpdateSubscriptionPlanDto } from './dto/update-subscription-plan.dto';
 import { MercadoPagoService } from './mercado-pago.service';
 import { SubscriptionPayment, PaymentStatus } from '../database/entities/subscription-payments.entity';
+import { UserContentProgress } from '../database/entities/user-content-progress.entity';
+import { Content } from '../database/entities/content.entity';
+import { GetMembersQueryDto } from './dto/get-members-query.dto';
+import { MembersResponseDto, MemberDto, MemberStatsDto } from './dto/members-response.dto';
 
 @Injectable()
 export class SubscriptionsService {
@@ -32,6 +36,12 @@ export class SubscriptionsService {
     private readonly billingCycleRepository: Repository<BillingCycle>,
     @InjectRepository(SubscriptionPayment)
     private readonly subscriptionPaymentRepository: Repository<SubscriptionPayment>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    @InjectRepository(UserContentProgress)
+    private readonly userContentProgressRepository: Repository<UserContentProgress>,
+    @InjectRepository(Content)
+    private readonly contentRepository: Repository<Content>,
     private readonly mercadoPagoService: MercadoPagoService,
   ) {}
 
@@ -715,6 +725,117 @@ export class SubscriptionsService {
       },
       order: { createdAt: 'DESC' },
     });
+  }
+
+  async getMembers(query: GetMembersQueryDto): Promise<MembersResponseDto> {
+    // Construir query base para obtener suscripciones con usuarios
+    const queryBuilder = this.userSubscriptionRepository
+      .createQueryBuilder('subscription')
+      .leftJoinAndSelect('subscription.user', 'user')
+      .leftJoinAndSelect('subscription.plan', 'plan')
+      .leftJoinAndSelect('subscription.billingCycle', 'billingCycle');
+
+    // Aplicar filtro de búsqueda por nombre o email
+    if (query.search) {
+      queryBuilder.andWhere(
+        '(user.name ILIKE :search OR user.email ILIKE :search)',
+        { search: `%${query.search}%` },
+      );
+    }
+
+    // Aplicar filtro de estado
+    if (query.status) {
+      queryBuilder.andWhere('subscription.status = :status', { status: query.status });
+    }
+
+    // Obtener todas las suscripciones
+    const subscriptions = await queryBuilder
+      .orderBy('subscription.createdAt', 'DESC')
+      .getMany();
+
+    // Calcular estadísticas
+    const total = subscriptions.length;
+    const active = subscriptions.filter((s) => s.status === SubscriptionStatus.ACTIVE).length;
+    const cancelled = subscriptions.filter((s) => s.status === SubscriptionStatus.CANCELLED).length;
+
+    // Calcular ingresos mensuales (pagos completados del mes actual)
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    const monthlyPayments = await this.subscriptionPaymentRepository
+      .createQueryBuilder('payment')
+      .where('payment.status = :status', { status: PaymentStatus.COMPLETED })
+      .andWhere('payment.paid_at >= :startOfMonth', { startOfMonth })
+      .andWhere('payment.paid_at <= :endOfMonth', { endOfMonth })
+      .getMany();
+
+    const monthlyRevenue = monthlyPayments.reduce((sum, payment) => {
+      return sum + parseFloat(payment.amount.toString());
+    }, 0);
+
+    // Obtener todos los contenidos para calcular progreso
+    const allContents = await this.contentRepository.find({
+      where: { isActive: true },
+    });
+    const totalContents = allContents.length;
+
+    // Construir lista de miembros con sus datos
+    const members: MemberDto[] = await Promise.all(
+      subscriptions.map(async (subscription) => {
+        // Calcular progreso del usuario
+        const userProgress = await this.userContentProgressRepository.find({
+          where: { user: { id: subscription.user.id } },
+        });
+
+        const completedContents = userProgress.filter((p) => p.isCompleted).length;
+        const progress = totalContents > 0 ? Math.round((completedContents / totalContents) * 100) : 0;
+
+        // Calcular total pagado
+        const payments = await this.subscriptionPaymentRepository.find({
+          where: {
+            userSubscription: { id: subscription.id },
+            status: PaymentStatus.COMPLETED,
+          },
+        });
+
+        const totalPaid = payments.reduce((sum, payment) => {
+          return sum + parseFloat(payment.amount.toString());
+        }, 0);
+
+        const currency = payments.length > 0 ? payments[0].currency : subscription.user.preferredCurrency || 'CLP';
+
+        return {
+          id: subscription.user.id,
+          name: subscription.user.name,
+          email: subscription.user.email,
+          subscription: {
+            id: subscription.id,
+            planName: subscription.plan.name,
+            status: subscription.status,
+            startedAt: subscription.startedAt,
+            currentPeriodStart: subscription.currentPeriodStart,
+            currentPeriodEnd: subscription.currentPeriodEnd,
+          },
+          progress,
+          totalPaid,
+          currency,
+        };
+      }),
+    );
+
+    const stats: MemberStatsDto = {
+      total,
+      active,
+      cancelled,
+      monthlyRevenue,
+    };
+
+    return {
+      stats,
+      members,
+      total,
+    };
   }
 }
 

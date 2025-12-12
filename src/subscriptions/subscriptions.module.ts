@@ -8,6 +8,9 @@ import { SubscriptionPrice } from '../database/entities/subscription-prices.enti
 import { UserSubscription } from '../database/entities/user-subscriptions.entity';
 import { BillingCycle } from '../database/entities/billing-cycles.entity';
 import { SubscriptionPayment } from '../database/entities/subscription-payments.entity';
+import { User } from '../database/entities/users.entity';
+import { UserContentProgress } from '../database/entities/user-content-progress.entity';
+import { Content } from '../database/entities/content.entity';
 
 @Module({
   imports: [
@@ -17,6 +20,9 @@ import { SubscriptionPayment } from '../database/entities/subscription-payments.
       UserSubscription,
       BillingCycle,
       SubscriptionPayment,
+      User,
+      UserContentProgress,
+      Content,
     ]),
   ],
   controllers: [SubscriptionsController],
