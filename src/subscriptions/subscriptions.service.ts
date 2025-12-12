@@ -728,35 +728,62 @@ export class SubscriptionsService {
   }
 
   async getMembers(query: GetMembersQueryDto): Promise<MembersResponseDto> {
-    // Construir query base para obtener suscripciones con usuarios
-    const queryBuilder = this.userSubscriptionRepository
-      .createQueryBuilder('subscription')
-      .leftJoinAndSelect('subscription.user', 'user')
-      .leftJoinAndSelect('subscription.plan', 'plan')
-      .leftJoinAndSelect('subscription.billingCycle', 'billingCycle');
+    // Construir query base para obtener todos los usuarios
+    const userQueryBuilder = this.userRepository.createQueryBuilder('user');
 
     // Aplicar filtro de búsqueda por nombre o email
     if (query.search) {
-      queryBuilder.andWhere(
+      userQueryBuilder.andWhere(
         '(user.name ILIKE :search OR user.email ILIKE :search)',
         { search: `%${query.search}%` },
       );
     }
 
-    // Aplicar filtro de estado
-    if (query.status) {
-      queryBuilder.andWhere('subscription.status = :status', { status: query.status });
-    }
-
-    // Obtener todas las suscripciones
-    const subscriptions = await queryBuilder
-      .orderBy('subscription.createdAt', 'DESC')
+    // Obtener todos los usuarios
+    const users = await userQueryBuilder
+      .orderBy('user.createdAt', 'DESC')
       .getMany();
 
+    // Obtener todas las suscripciones con sus relaciones
+    const allSubscriptions = await this.userSubscriptionRepository.find({
+      relations: ['user', 'plan', 'billingCycle'],
+      order: { createdAt: 'DESC' },
+    });
+
+    // Crear un mapa de usuario -> suscripción más reciente
+    const userSubscriptionMap = new Map<string, UserSubscription>();
+    allSubscriptions.forEach((subscription) => {
+      const userId = subscription.user.id;
+      if (!userSubscriptionMap.has(userId)) {
+        userSubscriptionMap.set(userId, subscription);
+      } else {
+        // Si ya existe, comparar fechas y quedarse con la más reciente
+        const existing = userSubscriptionMap.get(userId);
+        if (subscription.createdAt > existing.createdAt) {
+          userSubscriptionMap.set(userId, subscription);
+        }
+      }
+    });
+
+    // Filtrar usuarios por estado de suscripción si se especifica
+    let filteredUsers = users;
+    if (query.status) {
+      filteredUsers = users.filter((user) => {
+        const subscription = userSubscriptionMap.get(user.id);
+        return subscription?.status === query.status;
+      });
+    }
+
     // Calcular estadísticas
-    const total = subscriptions.length;
-    const active = subscriptions.filter((s) => s.status === SubscriptionStatus.ACTIVE).length;
-    const cancelled = subscriptions.filter((s) => s.status === SubscriptionStatus.CANCELLED).length;
+    const total = users.length;
+    const active = users.filter((user) => {
+      const subscription = userSubscriptionMap.get(user.id);
+      return subscription?.status === SubscriptionStatus.ACTIVE;
+    }).length;
+    const cancelled = users.filter((user) => {
+      const subscription = userSubscriptionMap.get(user.id);
+      return subscription?.status === SubscriptionStatus.CANCELLED;
+    }).length;
 
     // Calcular ingresos mensuales (pagos completados del mes actual)
     const now = new Date();
@@ -782,41 +809,52 @@ export class SubscriptionsService {
 
     // Construir lista de miembros con sus datos
     const members: MemberDto[] = await Promise.all(
-      subscriptions.map(async (subscription) => {
+      filteredUsers.map(async (user) => {
+        const subscription = userSubscriptionMap.get(user.id);
+
         // Calcular progreso del usuario
         const userProgress = await this.userContentProgressRepository.find({
-          where: { user: { id: subscription.user.id } },
+          where: { user: { id: user.id } },
         });
 
         const completedContents = userProgress.filter((p) => p.isCompleted).length;
         const progress = totalContents > 0 ? Math.round((completedContents / totalContents) * 100) : 0;
 
-        // Calcular total pagado
-        const payments = await this.subscriptionPaymentRepository.find({
-          where: {
-            userSubscription: { id: subscription.id },
-            status: PaymentStatus.COMPLETED,
-          },
-        });
+        // Calcular total pagado (sumar todos los pagos de todas las suscripciones del usuario)
+        let totalPaid = 0;
+        let currency = user.preferredCurrency || 'CLP';
 
-        const totalPaid = payments.reduce((sum, payment) => {
-          return sum + parseFloat(payment.amount.toString());
-        }, 0);
+        if (subscription) {
+          const payments = await this.subscriptionPaymentRepository.find({
+            where: {
+              userSubscription: { id: subscription.id },
+              status: PaymentStatus.COMPLETED,
+            },
+          });
 
-        const currency = payments.length > 0 ? payments[0].currency : subscription.user.preferredCurrency || 'CLP';
+          totalPaid = payments.reduce((sum, payment) => {
+            return sum + parseFloat(payment.amount.toString());
+          }, 0);
+
+          if (payments.length > 0) {
+            currency = payments[0].currency;
+          }
+        }
 
         return {
-          id: subscription.user.id,
-          name: subscription.user.name,
-          email: subscription.user.email,
-          subscription: {
-            id: subscription.id,
-            planName: subscription.plan.name,
-            status: subscription.status,
-            startedAt: subscription.startedAt,
-            currentPeriodStart: subscription.currentPeriodStart,
-            currentPeriodEnd: subscription.currentPeriodEnd,
-          },
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          subscription: subscription
+            ? {
+                id: subscription.id,
+                planName: subscription.plan.name,
+                status: subscription.status,
+                startedAt: subscription.startedAt,
+                currentPeriodStart: subscription.currentPeriodStart,
+                currentPeriodEnd: subscription.currentPeriodEnd,
+              }
+            : null,
           progress,
           totalPaid,
           currency,
@@ -834,7 +872,7 @@ export class SubscriptionsService {
     return {
       stats,
       members,
-      total,
+      total: filteredUsers.length,
     };
   }
 }

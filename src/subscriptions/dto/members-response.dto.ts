@@ -18,7 +18,7 @@ export class MemberDto {
     startedAt: Date;
     currentPeriodStart: Date;
     currentPeriodEnd: Date;
-  };
+  } | null; // null si no tiene suscripción
   progress: number; // Porcentaje de progreso (0-100)
   totalPaid: number; // Total pagado en la moneda del usuario
   currency: string;
