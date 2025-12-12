@@ -759,7 +759,7 @@ export class SubscriptionsService {
       } else {
         // Si ya existe, comparar fechas y quedarse con la más reciente
         const existing = userSubscriptionMap.get(userId);
-        if (subscription.createdAt > existing.createdAt) {
+        if (existing && subscription.createdAt > existing.createdAt) {
           userSubscriptionMap.set(userId, subscription);
         }
       }
