@@ -9,8 +9,8 @@ export class WebpayService {
 
   constructor(private configService: ConfigService) {
     // Configurar WebPay según el entorno
-    this.isProduction = this.configService.get<string>('NODE_ENV') === 'production';
-    
+    // this.isProduction = this.configService.get<string>('NODE_ENV') === 'production';
+    this.isProduction = false;
     const envVarName = this.isProduction ? 'WEBPAY_COMMERCE_CODE' : 'WEBPAY_COMMERCE_CODE_TEST';
     const apiKeyVarName = this.isProduction ? 'WEBPAY_API_KEY' : 'WEBPAY_API_KEY_TEST';
     
