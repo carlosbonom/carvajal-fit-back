@@ -10,6 +10,9 @@ import {
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { RequestPasswordChangeDto } from './dto/request-password-change.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { VerifyPasswordChangeDto } from './dto/verify-password-change.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -71,6 +74,35 @@ export class AuthController {
       ...userProfile,
       subscription: subscription || null,
     };
+  }
+
+  @Public()
+  @Post('password/forgot')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(
+    @Body() forgotDto: ForgotPasswordDto,
+  ): Promise<{ message: string }> {
+    return this.authService.requestPasswordChangeByEmail(forgotDto.email);
+  }
+
+  @Post('password/request-change')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async requestPasswordChange(
+    @CurrentUser() user: User,
+    @Body() requestDto: RequestPasswordChangeDto,
+  ): Promise<{ message: string }> {
+    return this.authService.requestPasswordChange(user);
+  }
+
+  @Post('password/verify-and-change')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async verifyAndChangePassword(
+    @CurrentUser() user: User,
+    @Body() verifyDto: VerifyPasswordChangeDto,
+  ): Promise<{ message: string }> {
+    return this.authService.verifyAndChangePassword(user, verifyDto);
   }
 }
 

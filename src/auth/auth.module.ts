@@ -12,11 +12,13 @@ import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Reflector } from '@nestjs/core';
+import { PasswordResetCode } from '../database/entities/password-reset-code.entity';
 
 @Module({
   imports: [
     UsersModule,
     SubscriptionsModule,
+    TypeOrmModule.forFeature([PasswordResetCode]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

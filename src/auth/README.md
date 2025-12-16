@@ -30,7 +30,7 @@ TYPEORM_SYNC=false
 TYPEORM_LOG=false
 
 # Server Configuration
-PORT=3000
+PORT=3001
 
 # JWT Configuration
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production

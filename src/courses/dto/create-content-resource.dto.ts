@@ -17,7 +17,8 @@ export class CreateContentResourceDto {
   description?: string;
 
   @IsUrl({}, { message: 'La URL del recurso debe ser válida' })
+  @IsOptional()
   @MaxLength(500, { message: 'La URL del recurso no puede exceder 500 caracteres' })
-  resourceUrl: string;
+  resourceUrl?: string;
 }
 

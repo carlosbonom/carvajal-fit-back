@@ -17,11 +17,17 @@ import { UserSubscriptionDto, BillingCycleInfoDto } from './dto/user-subscriptio
 import { CancelSubscriptionDto } from './dto/cancel-subscription.dto';
 import { UpdateSubscriptionPlanDto } from './dto/update-subscription-plan.dto';
 import { MercadoPagoService } from './mercado-pago.service';
+import { MercadoPagoCheckoutService } from './mercado-pago-checkout.service';
+import { WebpayService } from './webpay.service';
+import { PayPalService } from './paypal.service';
 import { SubscriptionPayment, PaymentStatus } from '../database/entities/subscription-payments.entity';
 import { UserContentProgress } from '../database/entities/user-content-progress.entity';
 import { Content } from '../database/entities/content.entity';
 import { GetMembersQueryDto } from './dto/get-members-query.dto';
 import { MembersResponseDto, MemberDto, MemberStatsDto } from './dto/members-response.dto';
+import { MarketingService } from '../marketing/marketing.service';
+import { LiorenService } from '../lioren/lioren.service';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class SubscriptionsService {
@@ -43,6 +49,12 @@ export class SubscriptionsService {
     @InjectRepository(Content)
     private readonly contentRepository: Repository<Content>,
     private readonly mercadoPagoService: MercadoPagoService,
+    private readonly mercadoPagoCheckoutService: MercadoPagoCheckoutService,
+    private readonly webpayService: WebpayService,
+    private readonly paypalService: PayPalService,
+    private readonly marketingService: MarketingService,
+    private readonly liorenService: LiorenService,
+    private readonly configService: ConfigService,
   ) {}
 
   async getAvailablePlans(): Promise<SubscriptionPlanDto[]> {
@@ -501,6 +513,64 @@ export class SubscriptionsService {
     }
   }
 
+  /**
+   * Genera una boleta electrónica para un pago de membresía exitoso
+   * Retorna el PDF de la boleta o null si hay algún error
+   */
+  private async generarBoletaParaPago(
+    subscription: UserSubscription,
+    payment: SubscriptionPayment,
+  ): Promise<Buffer | null> {
+    try {
+      // Obtener RUT del usuario desde metadata del pago o suscripción, o usar un valor por defecto
+      // NOTA: El RUT debería ser capturado durante el registro o checkout
+      // Por ahora usamos un RUT genérico si no está disponible
+      const userRut = payment.metadata?.userRut || 
+                     subscription.metadata?.userRut || 
+                     this.configService.get<string>('LIOREN_DEFAULT_RUT') || 
+                     '111111111'; // RUT genérico por defecto
+
+      const userName = subscription.user.name || subscription.user.email.split('@')[0];
+      const planName = subscription.plan.name;
+      const billingCycle = subscription.billingCycle.intervalType === 'month' ? 'mensual' : 'anual';
+      
+      const descripcion = `Membresía ${planName} - ${billingCycle}`;
+
+      const boletaData = await this.liorenService.generarBoletaMembresia(
+        {
+          rut: userRut,
+          nombre: userName,
+          email: subscription.user.email,
+          direccion: payment.metadata?.direccion || subscription.metadata?.direccion,
+          comuna: payment.metadata?.comuna || subscription.metadata?.comuna,
+          ciudad: payment.metadata?.ciudad || subscription.metadata?.ciudad || 'Santiago',
+          telefono: subscription.user.phone || undefined,
+        },
+        {
+          monto: Number(payment.amount),
+          descripcion: descripcion,
+          fechaPago: payment.paidAt || new Date(),
+          referencia: payment.transactionId || payment.id,
+        },
+      );
+
+      // Guardar el ID de la boleta en el metadata del pago
+      payment.metadata = {
+        ...payment.metadata,
+        liorenBoletaId: boletaData.boleta.id,
+        liorenFolio: boletaData.boleta.folio,
+      };
+      await this.subscriptionPaymentRepository.save(payment);
+
+      return boletaData.pdf;
+    } catch (error: any) {
+      console.error('Error al generar boleta electrónica:', error);
+      // No lanzamos error para no interrumpir el flujo de activación
+      // La boleta es importante pero no crítica para la activación de la suscripción
+      return null;
+    }
+  }
+
   private async updateSubscriptionStatusFromMP(
     subscription: UserSubscription,
     mpSubscription: any,
@@ -874,6 +944,862 @@ export class SubscriptionsService {
       members,
       total: filteredUsers.length,
     };
+  }
+
+  /**
+   * Crea una transacción de WebPay Plus para una suscripción
+   */
+  async createWebpayTransaction(
+    user: User,
+    planId: string,
+    billingCycleId: string,
+    currency?: string,
+  ): Promise<{ token: string; url: string; subscriptionId: string }> {
+    // Validar que el plan existe y está activo
+    const plan = await this.subscriptionPlanRepository.findOne({
+      where: { id: planId, isActive: true },
+    });
+
+    if (!plan) {
+      throw new NotFoundException('Plan de suscripción no encontrado o no está activo');
+    }
+
+    // Validar que el billing cycle existe
+    const billingCycle = await this.billingCycleRepository.findOne({
+      where: { id: billingCycleId },
+    });
+
+    if (!billingCycle) {
+      throw new NotFoundException('Ciclo de facturación no encontrado');
+    }
+
+    // Obtener el precio del plan
+    const finalCurrency = currency || user.preferredCurrency || 'CLP';
+    const price = await this.subscriptionPriceRepository.findOne({
+      where: {
+        plan: { id: plan.id },
+        billingCycle: { id: billingCycle.id },
+        currency: finalCurrency,
+        isActive: true,
+      },
+    });
+
+    if (!price) {
+      throw new NotFoundException(
+        `No se encontró un precio activo para este plan, ciclo de facturación y moneda (${finalCurrency})`,
+      );
+    }
+
+    // Verificar si el usuario ya tiene una suscripción activa
+    const existingSubscription = await this.userSubscriptionRepository.findOne({
+      where: {
+        user: { id: user.id },
+        status: SubscriptionStatus.ACTIVE,
+      },
+    });
+
+    if (existingSubscription) {
+      throw new BadRequestException('Ya tienes una suscripción activa');
+    }
+
+    // Calcular fechas del período
+    const now = new Date();
+    const periodStart = new Date(now);
+    const periodEnd = this.calculatePeriodEnd(now, billingCycle.intervalType, billingCycle.intervalCount);
+
+    // Crear la suscripción en nuestra base de datos (con estado PAYMENT_FAILED hasta confirmar el pago)
+    const userSubscription = this.userSubscriptionRepository.create({
+      user,
+      plan,
+      billingCycle,
+      status: SubscriptionStatus.PAYMENT_FAILED,
+      startedAt: now,
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: periodEnd,
+      autoRenew: false, // WebPay no es recurrente, es un pago único
+      metadata: {
+        paymentProvider: 'webpay',
+        currency: finalCurrency,
+      },
+    });
+
+    const savedSubscription = await this.userSubscriptionRepository.save(userSubscription);
+
+    // Crear la transacción en WebPay
+    const buyOrder = `SUB-${savedSubscription.id.substring(0, 8).toUpperCase()}-${Date.now()}`;
+    const sessionId = user.id;
+    const amount = Math.round(parseFloat(price.amount.toString())); // WebPay requiere monto entero
+    const returnUrl = `${process.env.APP_URL || 'http://localhost:3000'}/checkout/success?subscriptionId=${savedSubscription.id}`;
+
+    const webpayResponse = await this.webpayService.createTransaction({
+      buyOrder,
+      sessionId,
+      amount,
+      returnUrl,
+    });
+
+    // Actualizar la suscripción con el token de WebPay
+    savedSubscription.metadata = {
+      ...savedSubscription.metadata,
+      webpayToken: webpayResponse.token,
+      buyOrder,
+      amount,
+    };
+    await this.userSubscriptionRepository.save(savedSubscription);
+
+    return {
+      token: webpayResponse.token,
+      url: webpayResponse.url,
+      subscriptionId: savedSubscription.id,
+    };
+  }
+
+  /**
+   * Valida y confirma un pago de WebPay
+   */
+  async validateWebpayPayment(token: string, subscriptionId?: string): Promise<{
+    success: boolean;
+    subscription?: UserSubscription;
+    redirectUrl?: string;
+  }> {
+    try {
+      // Confirmar y obtener el resultado de la transacción desde WebPay
+      const transactionResult = await this.webpayService.commitTransaction(token);
+
+      // La respuesta puede tener diferentes estructuras según la versión del SDK
+      // Registrar toda la respuesta para debugging
+      console.log('📊 Resultado completo de la transacción WebPay:', JSON.stringify(transactionResult, null, 2));
+
+      // Extraer campos con diferentes nombres posibles (el SDK puede usar snake_case o camelCase)
+      const responseCode = transactionResult.responseCode ?? transactionResult.response_code;
+      const status = transactionResult.status;
+      const buyOrderValue = transactionResult.buyOrder ?? transactionResult.buy_order;
+      const amount = transactionResult.amount;
+      const authorizationCode = transactionResult.authorizationCode ?? transactionResult.authorization_code;
+
+      console.log('📊 Campos extraídos:', {
+        responseCode,
+        status,
+        buyOrder: buyOrderValue,
+        amount,
+        authorizationCode,
+      });
+
+      // Verificar que la transacción fue exitosa según la documentación de WebPay
+      // Debe cumplir: response_code === 0 Y status === 'AUTHORIZED'
+      // Si responseCode existe, debe ser 0. Si no existe pero status es AUTHORIZED, también es válido
+      if (responseCode !== undefined && responseCode !== 0) {
+        throw new BadRequestException(
+          `Transacción rechazada. Código de respuesta: ${responseCode}`,
+        );
+      }
+
+      // El status es el indicador principal
+      if (!status || status !== 'AUTHORIZED') {
+        throw new BadRequestException(
+          `Transacción no autorizada. Estado: ${status || 'DESCONOCIDO'}. ${responseCode !== undefined ? `Código: ${responseCode}` : ''}`,
+        );
+      }
+
+      console.log('✅ Transacción validada correctamente (status: AUTHORIZED' + (responseCode !== undefined ? `, responseCode: ${responseCode}` : '') + ')');
+
+      // Buscar la suscripción
+      let subscription: UserSubscription | null = null;
+
+      if (subscriptionId) {
+        subscription = await this.userSubscriptionRepository.findOne({
+          where: { id: subscriptionId },
+          relations: ['user', 'plan', 'billingCycle'],
+        });
+      }
+
+      // Si no se encontró por ID, buscar por buyOrder en metadata
+      if (!subscription && buyOrderValue) {
+        const subscriptions = await this.userSubscriptionRepository.find({
+          where: {},
+          relations: ['user', 'plan', 'billingCycle'],
+        });
+
+        subscription = subscriptions.find(
+          (sub) => sub.metadata?.buyOrder === buyOrderValue,
+        ) || null;
+      }
+
+      if (!subscription) {
+        throw new NotFoundException('Suscripción no encontrada');
+      }
+
+      // Verificar que el monto coincide
+      const expectedAmount = subscription.metadata?.amount;
+      const receivedAmount = amount || transactionResult.amount;
+      if (expectedAmount && receivedAmount && receivedAmount !== expectedAmount) {
+        throw new BadRequestException(`El monto de la transacción no coincide. Esperado: ${expectedAmount}, Recibido: ${receivedAmount}`);
+      }
+
+      // Verificar que no haya sido procesada antes
+      const transactionId = buyOrderValue || subscription.metadata?.buyOrder;
+      const existingPayment = await this.subscriptionPaymentRepository.findOne({
+        where: {
+          transactionId: transactionId,
+          status: PaymentStatus.COMPLETED,
+        },
+      });
+
+      if (existingPayment) {
+        // Ya fue procesada, retornar éxito
+        return {
+          success: true,
+          subscription,
+          redirectUrl: `${process.env.APP_URL || 'http://localhost:3000'}/club`,
+        };
+      }
+
+      // Crear registro de pago
+      const payment = this.subscriptionPaymentRepository.create({
+        userSubscription: subscription,
+        user: subscription.user,
+        amount: amount || subscription.metadata?.amount || 0,
+        currency: subscription.metadata?.currency || 'CLP',
+        status: PaymentStatus.COMPLETED,
+        paymentMethod: transactionResult.paymentTypeCode || transactionResult.payment_type_code || null,
+        paymentProvider: 'webpay',
+        transactionId: transactionId,
+        periodStart: subscription.currentPeriodStart,
+        periodEnd: subscription.currentPeriodEnd,
+        paidAt: new Date(),
+        metadata: {
+          webpayResponse: transactionResult,
+          authorizationCode: authorizationCode,
+          cardNumber: transactionResult.cardDetail?.cardNumber || transactionResult.card_detail?.card_number || null,
+        },
+      });
+
+      await this.subscriptionPaymentRepository.save(payment);
+
+      // Activar la suscripción
+      subscription.status = SubscriptionStatus.ACTIVE;
+      subscription.metadata = {
+        ...subscription.metadata,
+        webpayTransactionId: transactionId,
+        webpayAuthorizationCode: authorizationCode,
+        paymentConfirmedAt: new Date().toISOString(),
+      };
+      await this.userSubscriptionRepository.save(subscription);
+
+      // Generar boleta electrónica y enviar email de bienvenida con adjunto
+      try {
+        const boletaPDF = await this.generarBoletaParaPago(subscription, payment);
+        
+        const attachments = boletaPDF ? [{
+          filename: `boleta-${payment.transactionId || payment.id}.pdf`,
+          content: boletaPDF,
+          contentType: 'application/pdf',
+        }] : undefined;
+
+        await this.marketingService.sendWelcomeEmail(
+          subscription.user.email,
+          subscription.user.name || subscription.user.email.split('@')[0],
+          subscription.plan.name,
+          attachments,
+        );
+      } catch (error) {
+        console.error('Error al enviar email de bienvenida:', error);
+        // No lanzamos error para no interrumpir el flujo
+      }
+
+      // La transacción ya fue confirmada con commitTransaction
+      // No necesitamos hacer nada más
+
+      return {
+        success: true,
+        subscription,
+        redirectUrl: transactionResult.urlRedirection || `${process.env.APP_URL || 'http://localhost:3000'}/club`,
+      };
+    } catch (error: any) {
+      console.error('Error al validar pago WebPay:', error);
+      throw new BadRequestException(
+        error.message || 'Error al validar el pago',
+      );
+    }
+  }
+
+  /**
+   * Crea una orden de PayPal para una suscripción
+   */
+  async createPayPalOrder(
+    user: User,
+    planId: string,
+    billingCycleId: string,
+    currency?: string,
+  ): Promise<{ orderId: string; approveUrl: string; subscriptionId: string }> {
+    // Validar que el plan existe y está activo
+    const plan = await this.subscriptionPlanRepository.findOne({
+      where: { id: planId, isActive: true },
+    });
+
+    if (!plan) {
+      throw new NotFoundException('Plan de suscripción no encontrado o no está activo');
+    }
+
+    // Validar que el billing cycle existe
+    const billingCycle = await this.billingCycleRepository.findOne({
+      where: { id: billingCycleId },
+    });
+
+    if (!billingCycle) {
+      throw new NotFoundException('Ciclo de facturación no encontrado');
+    }
+
+    // Para PayPal, siempre buscar el precio en USD
+    // PayPal solo acepta USD, así que debemos usar el precio en USD
+    const price = await this.subscriptionPriceRepository.findOne({
+      where: {
+        plan: { id: plan.id },
+        billingCycle: { id: billingCycle.id },
+        currency: 'USD', // PayPal siempre usa USD
+        isActive: true,
+      },
+    });
+
+    if (!price) {
+      throw new NotFoundException(
+        `No se encontró un precio activo en USD para este plan y ciclo de facturación. PayPal requiere precios en USD.`,
+      );
+    }
+
+    // Verificar si el usuario ya tiene una suscripción activa
+    const existingSubscription = await this.userSubscriptionRepository.findOne({
+      where: {
+        user: { id: user.id },
+        status: SubscriptionStatus.ACTIVE,
+      },
+    });
+
+    if (existingSubscription) {
+      throw new BadRequestException('Ya tienes una suscripción activa');
+    }
+
+    // Calcular fechas del período
+    const now = new Date();
+    const periodStart = new Date(now);
+    const periodEnd = this.calculatePeriodEnd(now, billingCycle.intervalType, billingCycle.intervalCount);
+
+    // Crear la suscripción en nuestra base de datos (con estado PAYMENT_FAILED hasta confirmar el pago)
+    const userSubscription = this.userSubscriptionRepository.create({
+      user,
+      plan,
+      billingCycle,
+      status: SubscriptionStatus.PAYMENT_FAILED,
+      startedAt: now,
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: periodEnd,
+      autoRenew: false, // PayPal no es recurrente por defecto
+      metadata: {
+        paymentProvider: 'paypal',
+        currency: 'USD', // PayPal siempre usa USD
+      },
+    });
+
+    const savedSubscription = await this.userSubscriptionRepository.save(userSubscription);
+
+    // Crear la orden en PayPal
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const returnUrl = `${appUrl}/checkout/success?subscriptionId=${savedSubscription.id}&paymentProvider=paypal`;
+    const cancelUrl = `${appUrl}/checkout?canceled=true`;
+
+    // El precio ya está en USD, usarlo directamente
+    const paypalAmount = parseFloat(price.amount.toString());
+    const paypalCurrency = 'USD';
+    
+    console.log(`💰 Creando orden PayPal: ${paypalAmount} ${paypalCurrency}`);
+
+    const paypalOrder = await this.paypalService.createOrder({
+      amount: paypalAmount,
+      currency: paypalCurrency,
+      returnUrl,
+      cancelUrl,
+      description: `Suscripción ${plan.name} - ${billingCycle.name}`,
+      customId: savedSubscription.id,
+    });
+
+    // Actualizar la suscripción con el orderId de PayPal
+    savedSubscription.metadata = {
+      ...savedSubscription.metadata,
+      paypalOrderId: paypalOrder.id,
+      amount: paypalAmount, // Monto en USD
+      currency: 'USD',
+    };
+    await this.userSubscriptionRepository.save(savedSubscription);
+
+    return {
+      orderId: paypalOrder.id,
+      approveUrl: paypalOrder.approveUrl,
+      subscriptionId: savedSubscription.id,
+    };
+  }
+
+  /**
+   * Valida y confirma un pago de PayPal
+   */
+  async validatePayPalPayment(orderId: string, subscriptionId?: string): Promise<{
+    success: boolean;
+    subscription?: UserSubscription;
+    redirectUrl?: string;
+  }> {
+    try {
+      // Capturar la orden en PayPal
+      const captureResult = await this.paypalService.captureOrder(orderId);
+
+      console.log('📊 Resultado de captura PayPal:', JSON.stringify(captureResult, null, 2));
+
+      // Verificar que la orden fue completada exitosamente
+      // El status de la orden debe ser COMPLETED
+      const orderStatus = captureResult.status;
+      if (orderStatus !== 'COMPLETED') {
+        throw new BadRequestException(`Pago no completado. Estado de la orden: ${orderStatus}`);
+      }
+
+      // Obtener el purchase unit
+      const purchaseUnit = captureResult.purchase_units?.[0];
+      if (!purchaseUnit) {
+        throw new BadRequestException('No se encontró información de la compra en la respuesta de PayPal');
+      }
+
+      const payments = purchaseUnit.payments;
+      const capture = payments?.captures?.[0];
+      
+      if (!capture) {
+        throw new BadRequestException('No se encontró información de captura en la respuesta de PayPal');
+      }
+
+      // La captura puede estar en PENDING (especialmente en sandbox con PENDING_REVIEW)
+      // pero si la orden está COMPLETED, el pago fue aprobado
+      const captureStatus = capture.status;
+      if (captureStatus !== 'COMPLETED' && captureStatus !== 'PENDING') {
+        throw new BadRequestException(
+          `La captura del pago no está en un estado válido. Estado: ${captureStatus}${capture.status_details?.reason ? ` (${capture.status_details.reason})` : ''}`
+        );
+      }
+
+      // Si está PENDING, registrar un warning pero continuar
+      if (captureStatus === 'PENDING') {
+        console.warn(`⚠️ Captura en estado PENDING: ${capture.status_details?.reason || 'Sin razón especificada'}`);
+        console.log('ℹ️ La orden está COMPLETED, por lo que el pago fue aprobado. PayPal notificará cuando la captura se complete.');
+      }
+
+      // Buscar la suscripción
+      let subscription: UserSubscription | null = null;
+
+      if (subscriptionId) {
+        subscription = await this.userSubscriptionRepository.findOne({
+          where: { id: subscriptionId },
+          relations: ['user', 'plan', 'billingCycle'],
+        });
+      }
+
+      // Si no se encontró por ID, buscar por orderId en metadata
+      if (!subscription) {
+        const subscriptions = await this.userSubscriptionRepository.find({
+          where: {},
+          relations: ['user', 'plan', 'billingCycle'],
+        });
+
+        subscription = subscriptions.find(
+          (sub) => sub.metadata?.paypalOrderId === orderId,
+        ) || null;
+      }
+
+      if (!subscription) {
+        throw new NotFoundException('Suscripción no encontrada');
+      }
+
+      // Verificar que el monto coincide (PayPal siempre retorna USD)
+      const expectedAmount = subscription.metadata?.amount;
+      const receivedAmount = parseFloat(capture.amount?.value || '0');
+      const receivedCurrency = capture.amount?.currency_code || 'USD';
+      
+      // Comparar montos en USD
+      if (expectedAmount && receivedAmount && Math.abs(receivedAmount - expectedAmount) > 0.01) {
+        throw new BadRequestException(
+          `El monto de la transacción no coincide. Esperado: ${expectedAmount} USD, Recibido: ${receivedAmount} ${receivedCurrency}`
+        );
+      }
+      
+      console.log(`✅ Monto validado: ${receivedAmount} ${receivedCurrency} (esperado: ${expectedAmount} USD)`);
+
+      // Verificar que no haya sido procesada antes
+      const transactionId = capture.id;
+      const existingPayment = await this.subscriptionPaymentRepository.findOne({
+        where: {
+          transactionId: transactionId,
+          status: PaymentStatus.COMPLETED,
+        },
+      });
+
+      if (existingPayment) {
+        // Ya fue procesada, retornar éxito
+        return {
+          success: true,
+          subscription,
+          redirectUrl: `${process.env.APP_URL || 'http://localhost:3000'}/club`,
+        };
+      }
+
+      // Crear registro de pago
+      const payment = this.subscriptionPaymentRepository.create({
+        userSubscription: subscription,
+        user: subscription.user,
+        amount: receivedAmount, // Monto en USD
+        currency: 'USD', // PayPal siempre usa USD
+        status: PaymentStatus.COMPLETED,
+        paymentMethod: 'paypal',
+        paymentProvider: 'paypal',
+        transactionId: transactionId,
+        periodStart: subscription.currentPeriodStart,
+        periodEnd: subscription.currentPeriodEnd,
+        paidAt: new Date(capture.create_time || Date.now()),
+        metadata: {
+          paypalCapture: capture,
+          paypalOrder: captureResult,
+          payer: captureResult.payer,
+        },
+      });
+
+      await this.subscriptionPaymentRepository.save(payment);
+
+      // Activar la suscripción
+      // Si la captura está en PENDING, mantener metadata para verificar después
+      subscription.status = SubscriptionStatus.ACTIVE;
+      subscription.metadata = {
+        ...subscription.metadata,
+        paypalTransactionId: transactionId,
+        paypalCaptureId: capture.id,
+        paypalOrderId: orderId,
+        paypalCaptureStatus: captureStatus,
+        paymentConfirmedAt: new Date().toISOString(),
+        // Si está PENDING, guardar info para verificar después
+        ...(captureStatus === 'PENDING' && {
+          paypalPendingReason: capture.status_details?.reason,
+          needsCaptureVerification: true,
+        }),
+      };
+      await this.userSubscriptionRepository.save(subscription);
+
+      // Generar boleta electrónica y enviar email de bienvenida con adjunto
+      try {
+        const boletaPDF = await this.generarBoletaParaPago(subscription, payment);
+        
+        const attachments = boletaPDF ? [{
+          filename: `boleta-${payment.transactionId || payment.id}.pdf`,
+          content: boletaPDF,
+          contentType: 'application/pdf',
+        }] : undefined;
+
+        await this.marketingService.sendWelcomeEmail(
+          subscription.user.email,
+          subscription.user.name || subscription.user.email.split('@')[0],
+          subscription.plan.name,
+          attachments,
+        );
+      } catch (error) {
+        console.error('Error al enviar email de bienvenida PayPal:', error);
+        // No lanzamos error para no interrumpir el flujo
+      }
+
+      return {
+        success: true,
+        subscription,
+        redirectUrl: `${process.env.APP_URL || 'http://localhost:3000'}/club`,
+      };
+    } catch (error: any) {
+      console.error('Error al validar pago PayPal:', error);
+      throw new BadRequestException(
+        error.message || 'Error al validar el pago',
+      );
+    }
+  }
+
+  /**
+   * Verifica el estado actual de una captura de PayPal
+   * Útil para verificar capturas que quedaron en PENDING
+   */
+  async verifyPayPalCapture(captureId: string): Promise<{
+    status: string;
+    capture: any;
+  }> {
+    try {
+      const captureDetails = await this.paypalService.getCaptureDetails(captureId);
+      
+      return {
+        status: captureDetails.status,
+        capture: captureDetails,
+      };
+    } catch (error: any) {
+      console.error('Error al verificar captura PayPal:', error);
+      throw new BadRequestException(
+        error.message || 'Error al verificar la captura',
+      );
+    }
+  }
+
+  /**
+   * Crea un checkout de Mercado Pago (nueva API - Checkout Pro)
+   */
+  async createMercadoPagoCheckout(
+    user: User,
+    planId: string,
+    billingCycleId: string,
+    currency?: string,
+  ): Promise<{ preferenceId: string; initPoint: string; subscriptionId: string }> {
+    // Validar que el plan existe y está activo
+    const plan = await this.subscriptionPlanRepository.findOne({
+      where: { id: planId, isActive: true },
+    });
+
+    if (!plan) {
+      throw new NotFoundException('Plan de suscripción no encontrado o no está activo');
+    }
+
+    // Validar que el billing cycle existe
+    const billingCycle = await this.billingCycleRepository.findOne({
+      where: { id: billingCycleId },
+    });
+
+    if (!billingCycle) {
+      throw new NotFoundException('Ciclo de facturación no encontrado');
+    }
+
+    // Obtener el precio del plan
+    const finalCurrency = currency || user.preferredCurrency || 'CLP';
+    const price = await this.subscriptionPriceRepository.findOne({
+      where: {
+        plan: { id: plan.id },
+        billingCycle: { id: billingCycle.id },
+        currency: finalCurrency,
+        isActive: true,
+      },
+    });
+
+    if (!price) {
+      throw new NotFoundException(
+        `No se encontró un precio activo para este plan, ciclo de facturación y moneda (${finalCurrency})`,
+      );
+    }
+
+    // Verificar si el usuario ya tiene una suscripción activa
+    const existingSubscription = await this.userSubscriptionRepository.findOne({
+      where: {
+        user: { id: user.id },
+        status: SubscriptionStatus.ACTIVE,
+      },
+    });
+
+    if (existingSubscription) {
+      throw new BadRequestException('Ya tienes una suscripción activa');
+    }
+
+    // Calcular fechas del período
+    const now = new Date();
+    const periodStart = new Date(now);
+    const periodEnd = this.calculatePeriodEnd(now, billingCycle.intervalType, billingCycle.intervalCount);
+
+    // Crear la suscripción en nuestra base de datos (con estado PAYMENT_FAILED hasta confirmar el pago)
+    const userSubscription = this.userSubscriptionRepository.create({
+      user,
+      plan,
+      billingCycle,
+      status: SubscriptionStatus.PAYMENT_FAILED,
+      startedAt: now,
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: periodEnd,
+      autoRenew: false, // Checkout Pro es pago único
+      metadata: {
+        paymentProvider: 'mercadopago_checkout',
+        currency: finalCurrency,
+      },
+    });
+
+    const savedSubscription = await this.userSubscriptionRepository.save(userSubscription);
+
+    // Crear la preferencia de pago en Mercado Pago
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const returnUrl = `${appUrl}/checkout/success?subscriptionId=${savedSubscription.id}&paymentProvider=mercadopago`;
+    const cancelUrl = `${appUrl}/checkout?canceled=true`;
+
+    const amount = parseFloat(price.amount.toString());
+
+    const preference = await this.mercadoPagoCheckoutService.createPaymentPreference({
+      amount,
+      currency: finalCurrency,
+      description: `Suscripción ${plan.name} - ${billingCycle.name}`,
+      externalReference: savedSubscription.id,
+      returnUrl,
+      cancelUrl,
+      payerEmail: user.email,
+      payerName: user.name || undefined,
+    });
+
+    // Actualizar la suscripción con el preferenceId de Mercado Pago
+    savedSubscription.metadata = {
+      ...savedSubscription.metadata,
+      mercadoPagoPreferenceId: preference.id,
+      amount,
+    };
+    await this.userSubscriptionRepository.save(savedSubscription);
+
+    return {
+      preferenceId: preference.id,
+      initPoint: preference.sandboxInitPoint || preference.initPoint,
+      subscriptionId: savedSubscription.id,
+    };
+  }
+
+  /**
+   * Valida y confirma un pago de Mercado Pago Checkout
+   */
+  async validateMercadoPagoPayment(paymentId: string, subscriptionId?: string): Promise<{
+    success: boolean;
+    subscription?: UserSubscription;
+    redirectUrl?: string;
+  }> {
+    try {
+      // Obtener información del pago desde Mercado Pago
+      const payment = await this.mercadoPagoCheckoutService.getPayment(paymentId);
+
+      console.log('📊 Resultado de pago Mercado Pago:', JSON.stringify(payment, null, 2));
+
+      // Verificar que el pago fue aprobado
+      const status = payment.status;
+      if (status !== 'approved') {
+        throw new BadRequestException(`Pago no aprobado. Estado: ${status}`);
+      }
+
+      // Buscar la suscripción
+      let subscription: UserSubscription | null = null;
+
+      if (subscriptionId) {
+        subscription = await this.userSubscriptionRepository.findOne({
+          where: { id: subscriptionId },
+          relations: ['user', 'plan', 'billingCycle'],
+        });
+      }
+
+      // Si no se encontró por ID, buscar por external_reference en el pago
+      if (!subscription && payment.external_reference) {
+        subscription = await this.userSubscriptionRepository.findOne({
+          where: { id: payment.external_reference },
+          relations: ['user', 'plan', 'billingCycle'],
+        });
+      }
+
+      // Si no se encontró, buscar por preference_id en metadata
+      if (!subscription && payment.preference_id) {
+        const subscriptions = await this.userSubscriptionRepository.find({
+          where: {},
+          relations: ['user', 'plan', 'billingCycle'],
+        });
+
+        subscription = subscriptions.find(
+          (sub) => sub.metadata?.mercadoPagoPreferenceId === payment.preference_id,
+        ) || null;
+      }
+
+      if (!subscription) {
+        throw new NotFoundException('Suscripción no encontrada');
+      }
+
+      // Verificar que el monto coincide
+      const expectedAmount = subscription.metadata?.amount;
+      const receivedAmount = payment.transaction_amount;
+      if (expectedAmount && receivedAmount && Math.abs(receivedAmount - expectedAmount) > 0.01) {
+        throw new BadRequestException(
+          `El monto de la transacción no coincide. Esperado: ${expectedAmount}, Recibido: ${receivedAmount}`
+        );
+      }
+
+      console.log(`✅ Monto validado: ${receivedAmount} ${payment.currency_id} (esperado: ${expectedAmount})`);
+
+      // Verificar que no haya sido procesada antes
+      const transactionId = payment.id?.toString();
+      const existingPayment = await this.subscriptionPaymentRepository.findOne({
+        where: {
+          transactionId: transactionId,
+          status: PaymentStatus.COMPLETED,
+        },
+      });
+
+      if (existingPayment) {
+        // Ya fue procesada, retornar éxito
+        return {
+          success: true,
+          subscription,
+          redirectUrl: `${process.env.APP_URL || 'http://localhost:3000'}/club`,
+        };
+      }
+
+      // Crear registro de pago
+      const paymentRecord = this.subscriptionPaymentRepository.create({
+        userSubscription: subscription,
+        user: subscription.user,
+        amount: receivedAmount,
+        currency: payment.currency_id || subscription.metadata?.currency || 'CLP',
+        status: PaymentStatus.COMPLETED,
+        paymentMethod: payment.payment_method_id || null,
+        paymentProvider: 'mercadopago_checkout',
+        transactionId: transactionId,
+        periodStart: subscription.currentPeriodStart,
+        periodEnd: subscription.currentPeriodEnd,
+        paidAt: payment.date_approved ? new Date(payment.date_approved) : new Date(),
+        metadata: {
+          mercadoPagoPayment: payment,
+          paymentType: payment.payment_type_id,
+        },
+      });
+
+      await this.subscriptionPaymentRepository.save(paymentRecord);
+
+      // Activar la suscripción
+      subscription.status = SubscriptionStatus.ACTIVE;
+      subscription.metadata = {
+        ...subscription.metadata,
+        mercadoPagoPaymentId: transactionId,
+        mercadoPagoPreferenceId: payment.preference_id,
+        paymentConfirmedAt: new Date().toISOString(),
+      };
+      await this.userSubscriptionRepository.save(subscription);
+
+      // Generar boleta electrónica y enviar email de bienvenida con adjunto
+      try {
+        const boletaPDF = await this.generarBoletaParaPago(subscription, payment);
+        
+        const attachments = boletaPDF ? [{
+          filename: `boleta-${payment.transactionId || payment.id}.pdf`,
+          content: boletaPDF,
+          contentType: 'application/pdf',
+        }] : undefined;
+
+        await this.marketingService.sendWelcomeEmail(
+          subscription.user.email,
+          subscription.user.name || subscription.user.email.split('@')[0],
+          subscription.plan.name,
+          attachments,
+        );
+      } catch (error) {
+        console.error('Error al enviar email de bienvenida:', error);
+        // No lanzamos error para no interrumpir el flujo
+      }
+
+      return {
+        success: true,
+        subscription,
+        redirectUrl: `${process.env.APP_URL || 'http://localhost:3000'}/club`,
+      };
+    } catch (error: any) {
+      console.error('Error al validar pago Mercado Pago:', error);
+      throw new BadRequestException(
+        error.message || 'Error al validar el pago',
+      );
+    }
   }
 }
 

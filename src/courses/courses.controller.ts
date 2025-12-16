@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Patch,
+  Delete,
   Body,
   Param,
   HttpCode,
@@ -24,6 +25,9 @@ import { UpdateCourseDto } from './dto/update-course.dto';
 import { UpdateContentStatusDto } from './dto/update-content-status.dto';
 import { UpdateContentDto } from './dto/update-content.dto';
 import { UpdateContentOrderDto } from './dto/update-content-order.dto';
+import { UpdateCourseOrderDto } from './dto/update-course-order.dto';
+import { SaveContentProgressDto } from './dto/save-content-progress.dto';
+import { MarkContentCompletedDto } from './dto/mark-content-completed.dto';
 import { CourseResponseDto, ContentResponseDto, ContentResourceResponseDto, CourseWithContentResponseDto } from './dto/course-response.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../database/entities/users.entity';
@@ -69,6 +73,16 @@ export class CoursesController {
     @Body() updateCourseDto: UpdateCourseDto,
   ): Promise<CourseResponseDto> {
     return this.coursesService.updateCourse(id, updateCourseDto);
+  }
+
+  @Patch(':id/order')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async updateCourseOrder(
+    @Param('id') id: string,
+    @Body() updateOrderDto: UpdateCourseOrderDto,
+  ): Promise<CourseResponseDto> {
+    return this.coursesService.updateCourseOrder(id, updateOrderDto.sortOrder);
   }
 
   @Get(':id/content')
@@ -166,6 +180,59 @@ export class CoursesController {
     file?: Express.Multer.File,
   ): Promise<ContentResourceResponseDto> {
     return this.coursesService.createContentResource(contentId, createResourceDto, file);
+  }
+
+  @Delete('content/:contentId/resources/:resourceId')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteContentResource(
+    @Param('contentId') contentId: string,
+    @Param('resourceId') resourceId: string,
+  ): Promise<void> {
+    return this.coursesService.deleteContentResource(contentId, resourceId);
+  }
+
+  @Post('content/:contentId/progress')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async saveContentProgress(
+    @CurrentUser() user: User,
+    @Param('contentId') contentId: string,
+    @Body() saveProgressDto: SaveContentProgressDto,
+  ): Promise<{ progressSeconds: number; isCompleted: boolean }> {
+    return this.coursesService.saveContentProgress(user.id, contentId, saveProgressDto);
+  }
+
+  @Get('content/:contentId/progress')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async getContentProgress(
+    @CurrentUser() user: User,
+    @Param('contentId') contentId: string,
+  ): Promise<{ progressSeconds: number; isCompleted: boolean } | null> {
+    return this.coursesService.getContentProgress(user.id, contentId);
+  }
+
+  @Post('content/:contentId/completed')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async markContentCompleted(
+    @CurrentUser() user: User,
+    @Param('contentId') contentId: string,
+    @Body() markCompletedDto: MarkContentCompletedDto,
+  ): Promise<{ progressSeconds: number; isCompleted: boolean }> {
+    return this.coursesService.markContentCompleted(user.id, contentId, markCompletedDto);
+  }
+
+  @Get('course/:courseId/progress')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async getCourseProgress(
+    @CurrentUser() user: User,
+    @Param('courseId') courseId: string,
+  ): Promise<Record<string, { progressSeconds: number; isCompleted: boolean }>> {
+    const progressMap = await this.coursesService.getUserProgressForCourse(user.id, courseId);
+    return Object.fromEntries(progressMap);
   }
 }
 

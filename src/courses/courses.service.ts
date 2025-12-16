@@ -12,11 +12,14 @@ import { ContentResource } from '../database/entities/content-resources.entity';
 import { Creator } from '../database/entities/creators.entity';
 import { UserSubscription, SubscriptionStatus } from '../database/entities/user-subscriptions.entity';
 import { User, UserRole } from '../database/entities/users.entity';
+import { UserContentProgress } from '../database/entities/user-content-progress.entity';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { CreateContentDto } from './dto/create-content.dto';
 import { CreateContentResourceDto } from './dto/create-content-resource.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
 import { UpdateContentDto } from './dto/update-content.dto';
+import { SaveContentProgressDto } from './dto/save-content-progress.dto';
+import { MarkContentCompletedDto } from './dto/mark-content-completed.dto';
 import { CourseResponseDto, ContentResponseDto, ContentResourceResponseDto, CourseWithContentResponseDto } from './dto/course-response.dto';
 import { FileService } from '../file/file.service';
 
@@ -33,6 +36,8 @@ export class CoursesService {
     private readonly creatorRepository: Repository<Creator>,
     @InjectRepository(UserSubscription)
     private readonly userSubscriptionRepository: Repository<UserSubscription>,
+    @InjectRepository(UserContentProgress)
+    private readonly userContentProgressRepository: Repository<UserContentProgress>,
     private readonly fileService: FileService,
   ) {}
 
@@ -218,6 +223,50 @@ export class CoursesService {
         : null,
       createdAt: savedCourse.createdAt,
       updatedAt: savedCourse.updatedAt,
+    };
+  }
+
+  async updateCourseOrder(
+    courseId: string,
+    sortOrder: number,
+  ): Promise<CourseResponseDto> {
+    // Validar que el curso existe
+    const course = await this.courseRepository.findOne({
+      where: { id: courseId },
+      relations: ['creator'],
+    });
+
+    if (!course) {
+      throw new NotFoundException(`Curso con ID ${courseId} no encontrado`);
+    }
+
+    // Actualizar el orden
+    course.sortOrder = sortOrder;
+    const updatedCourse = await this.courseRepository.save(course);
+
+    // Retornar el curso actualizado
+    return {
+      id: updatedCourse.id,
+      title: updatedCourse.title,
+      slug: updatedCourse.slug,
+      description: updatedCourse.description,
+      thumbnailUrl: updatedCourse.thumbnailUrl,
+      trailerUrl: updatedCourse.trailerUrl,
+      level: updatedCourse.level,
+      durationMinutes: updatedCourse.durationMinutes,
+      isPublished: updatedCourse.isPublished,
+      publishedAt: updatedCourse.publishedAt,
+      sortOrder: updatedCourse.sortOrder,
+      metadata: updatedCourse.metadata,
+      creator: updatedCourse.creator
+        ? {
+            id: updatedCourse.creator.id,
+            name: updatedCourse.creator.name,
+            slug: updatedCourse.creator.slug,
+          }
+        : null,
+      createdAt: updatedCourse.createdAt,
+      updatedAt: updatedCourse.updatedAt,
     };
   }
 
@@ -469,11 +518,17 @@ export class CoursesService {
       resourceUrl = uploadedUrl;
     }
 
+    if (!resourceUrl) {
+      throw new BadRequestException(
+        'Debe proporcionar una URL de recurso o subir un archivo',
+      );
+    }
+
     // Crear el recurso
     const resource = this.contentResourceRepository.create({
       title: createResourceDto.title,
       description: createResourceDto.description || null,
-      resourceUrl: resourceUrl!,
+      resourceUrl: resourceUrl,
       content: content,
     } as DeepPartial<ContentResource>);
 
@@ -488,6 +543,37 @@ export class CoursesService {
       createdAt: savedResource.createdAt,
       updatedAt: savedResource.updatedAt,
     };
+  }
+
+  async deleteContentResource(
+    contentId: string,
+    resourceId: string,
+  ): Promise<void> {
+    // Validar que el contenido existe
+    const content = await this.contentRepository.findOne({
+      where: { id: contentId },
+    });
+
+    if (!content) {
+      throw new NotFoundException(`Contenido con ID ${contentId} no encontrado`);
+    }
+
+    // Validar que el recurso existe y pertenece al contenido
+    const resource = await this.contentResourceRepository.findOne({
+      where: {
+        id: resourceId,
+        content: { id: contentId },
+      },
+    });
+
+    if (!resource) {
+      throw new NotFoundException(
+        `Recurso con ID ${resourceId} no encontrado en el contenido especificado`,
+      );
+    }
+
+    // Eliminar el recurso
+    await this.contentResourceRepository.remove(resource);
   }
 
   async updateContent(
@@ -735,12 +821,9 @@ export class CoursesService {
           order: { sortOrder: 'ASC' },
         });
 
-        // Si es admin, devolver todo sin filtrar por desbloqueo. Si no, filtrar según el desbloqueo
-        const availableContents = isAdmin 
-          ? contents 
-          : contents.filter((content) => {
-              return this.isContentUnlocked(content, monthsSinceStart);
-            });
+        // Devolver todos los contenidos (no filtrar por desbloqueo)
+        // El frontend se encargará de mostrar cuáles están bloqueados
+        const availableContents = contents;
 
         return {
           id: course.id,
@@ -844,6 +927,181 @@ export class CoursesService {
     const monthsDiff = end.getMonth() - start.getMonth();
     
     return yearsDiff * 12 + monthsDiff;
+  }
+
+  async saveContentProgress(
+    userId: string,
+    contentId: string,
+    saveProgressDto: SaveContentProgressDto,
+  ): Promise<{ progressSeconds: number; isCompleted: boolean }> {
+    // Verificar que el contenido existe
+    const content = await this.contentRepository.findOne({
+      where: { id: contentId },
+    });
+
+    if (!content) {
+      throw new NotFoundException(`Contenido con ID ${contentId} no encontrado`);
+    }
+
+    // Buscar o crear el progreso del usuario
+    let progress = await this.userContentProgressRepository.findOne({
+      where: {
+        user: { id: userId },
+        content: { id: contentId },
+      },
+      relations: ['user', 'content'],
+    });
+
+    const now = new Date();
+    const progressSeconds = Math.min(saveProgressDto.progressSeconds, saveProgressDto.totalSeconds);
+    
+    // Determinar si está completado (si ha visto al menos el 90% del video)
+    const completionThreshold = saveProgressDto.totalSeconds * 0.9;
+    const isCompleted = progressSeconds >= completionThreshold;
+
+    if (progress) {
+      // Actualizar progreso existente
+      progress.progressSeconds = progressSeconds;
+      progress.lastWatchedAt = now;
+      progress.watchCount += 1;
+      
+      if (isCompleted && !progress.isCompleted) {
+        progress.isCompleted = true;
+        progress.completedAt = now;
+      } else if (!isCompleted) {
+        progress.isCompleted = false;
+        progress.completedAt = null;
+      }
+    } else {
+      // Crear nuevo progreso
+      const progressData: DeepPartial<UserContentProgress> = {
+        user: { id: userId } as User,
+        content: { id: contentId } as Content,
+        progressSeconds,
+        isCompleted,
+        lastWatchedAt: now,
+        watchCount: 1,
+      };
+      if (isCompleted) {
+        progressData.completedAt = now;
+      }
+      progress = this.userContentProgressRepository.create(progressData);
+    }
+
+    await this.userContentProgressRepository.save(progress);
+
+    return {
+      progressSeconds: progress.progressSeconds,
+      isCompleted: progress.isCompleted,
+    };
+  }
+
+  async getContentProgress(
+    userId: string,
+    contentId: string,
+  ): Promise<{ progressSeconds: number; isCompleted: boolean } | null> {
+    const progress = await this.userContentProgressRepository.findOne({
+      where: {
+        user: { id: userId },
+        content: { id: contentId },
+      },
+    });
+
+    if (!progress) {
+      return null;
+    }
+
+    return {
+      progressSeconds: progress.progressSeconds,
+      isCompleted: progress.isCompleted,
+    };
+  }
+
+  async markContentCompleted(
+    userId: string,
+    contentId: string,
+    markCompletedDto: MarkContentCompletedDto,
+  ): Promise<{ progressSeconds: number; isCompleted: boolean }> {
+    // Verificar que el contenido existe
+    const content = await this.contentRepository.findOne({
+      where: { id: contentId },
+    });
+
+    if (!content) {
+      throw new NotFoundException(`Contenido con ID ${contentId} no encontrado`);
+    }
+
+    // Buscar o crear el progreso del usuario
+    let progress = await this.userContentProgressRepository.findOne({
+      where: {
+        user: { id: userId },
+        content: { id: contentId },
+      },
+      relations: ['user', 'content'],
+    });
+
+    const now = new Date();
+
+    if (progress) {
+      // Actualizar progreso existente
+      progress.isCompleted = markCompletedDto.isCompleted;
+      if (markCompletedDto.isCompleted) {
+        // Si se marca como completado, establecer el progreso al 100%
+        progress.progressSeconds = content.durationSeconds || 0;
+        if (!progress.completedAt) {
+          progress.completedAt = now;
+        }
+      } else {
+        progress.completedAt = null;
+      }
+      progress.lastWatchedAt = now;
+    } else {
+      // Crear nuevo progreso
+      const progressData: DeepPartial<UserContentProgress> = {
+        user: { id: userId } as User,
+        content: { id: contentId } as Content,
+        progressSeconds: markCompletedDto.isCompleted ? (content.durationSeconds || 0) : 0,
+        isCompleted: markCompletedDto.isCompleted,
+        lastWatchedAt: now,
+        watchCount: 1,
+      };
+      if (markCompletedDto.isCompleted) {
+        progressData.completedAt = now;
+      }
+      progress = this.userContentProgressRepository.create(progressData);
+    }
+
+    await this.userContentProgressRepository.save(progress);
+
+    return {
+      progressSeconds: progress.progressSeconds,
+      isCompleted: progress.isCompleted,
+    };
+  }
+
+  async getUserProgressForCourse(
+    userId: string,
+    courseId: string,
+  ): Promise<Map<string, { progressSeconds: number; isCompleted: boolean }>> {
+    const progressList = await this.userContentProgressRepository
+      .createQueryBuilder('progress')
+      .innerJoinAndSelect('progress.content', 'content')
+      .where('progress.user.id = :userId', { userId })
+      .andWhere('content.course.id = :courseId', { courseId })
+      .getMany();
+
+    const progressMap = new Map<string, { progressSeconds: number; isCompleted: boolean }>();
+    
+    progressList.forEach((progress) => {
+      if (progress.content && progress.content.id) {
+        progressMap.set(progress.content.id, {
+          progressSeconds: progress.progressSeconds,
+          isCompleted: progress.isCompleted,
+        });
+      }
+    });
+
+    return progressMap;
   }
 }
 

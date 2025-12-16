@@ -5,12 +5,14 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  OneToMany,
   JoinColumn,
   Check,
   Index,
 } from 'typeorm';
 import { Creator } from './creators.entity';
 import { ProductCategory } from './product-categories.entity';
+import { ProductPrice } from './product-prices.entity';
 
 export enum ProductType {
   PDF = 'pdf',
@@ -18,11 +20,12 @@ export enum ProductType {
   VIDEO = 'video',
   EBOOK = 'ebook',
   TEMPLATE = 'template',
+  MERCHANDISE = 'merchandise',
   OTHER = 'other',
 }
 
 @Entity('products')
-@Check(`"product_type" IN ('pdf', 'digital_file', 'video', 'ebook', 'template', 'other')`)
+@Check(`"product_type" IN ('pdf', 'digital_file', 'video', 'ebook', 'template', 'merchandise', 'other')`)
 @Index('idx_products_creator', ['creator'])
 @Index('idx_products_category', ['category'])
 @Index('idx_products_slug', ['slug'])
@@ -69,11 +72,17 @@ export class Product {
   @Column({ type: 'varchar', length: 500, nullable: true, name: 'thumbnail_url' })
   thumbnailUrl: string;
 
+  @Column({ type: 'varchar', length: 500, nullable: true, name: 'banner_url' })
+  bannerUrl: string;
+
   @Column({ type: 'boolean', default: true, nullable: false, name: 'is_active' })
   isActive: boolean;
 
   @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, any>;
+
+  @OneToMany(() => ProductPrice, (price) => price.product)
+  prices: ProductPrice[];
 
   @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
   createdAt: Date;
@@ -81,6 +90,7 @@ export class Product {
   @UpdateDateColumn({ type: 'timestamptz', name: 'updated_at' })
   updatedAt: Date;
 }
+
 
 
 

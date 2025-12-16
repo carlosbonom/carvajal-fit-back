@@ -39,7 +39,7 @@ export class UserContentProgress {
   isCompleted: boolean;
 
   @Column({ type: 'timestamptz', nullable: true, name: 'completed_at' })
-  completedAt: Date;
+  completedAt: Date | null;
 
   @Column({
     type: 'timestamptz',

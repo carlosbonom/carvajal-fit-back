@@ -8,6 +8,10 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { CoursesModule } from './courses/courses.module';
+import { MarketingModule } from './marketing/marketing.module';
+import { SuccessStoriesModule } from './success-stories/success-stories.module';
+import { ProductsModule } from './products/products.module';
+import { LiorenModule } from './lioren/lioren.module';
 
 @Module({
   imports: [
@@ -22,6 +26,10 @@ import { CoursesModule } from './courses/courses.module';
     UsersModule,
     SubscriptionsModule,
     CoursesModule,
+    MarketingModule,
+    SuccessStoriesModule,
+    ProductsModule,
+    LiorenModule,
   ],
   controllers: [AppController],
   providers: [AppService],
