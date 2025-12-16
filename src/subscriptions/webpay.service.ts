@@ -14,8 +14,8 @@ export class WebpayService {
     const envVarName = this.isProduction ? 'WEBPAY_COMMERCE_CODE' : 'WEBPAY_COMMERCE_CODE_TEST';
     const apiKeyVarName = this.isProduction ? 'WEBPAY_API_KEY' : 'WEBPAY_API_KEY_TEST';
     
-    const commerceCode = this.configService.get<string>(envVarName);
-    const apiKey = this.configService.get<string>(apiKeyVarName);
+    const commerceCode = process.env[this.isProduction ? 'WEBPAY_COMMERCE_CODE' : 'WEBPAY_COMMERCE_CODE_TEST'];
+    const apiKey = process.env[this.isProduction ? 'WEBPAY_API_KEY' : 'WEBPAY_API_KEY_TEST'];
 
     console.log('🔍 Verificando variables de entorno WebPay:');
     console.log(`  - NODE_ENV: ${this.configService.get<string>('NODE_ENV')}`);
