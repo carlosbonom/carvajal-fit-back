@@ -158,7 +158,7 @@ export class MarketingService {
     try {
       const fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL') || 'noreply@carvajalfit.com';
       const fromName = this.configService.get<string>('RESEND_FROM_NAME') || 'Club Carvajal Fit';
-      const appUrl = this.configService.get<string>('APP_URL') || 'http://localhost:3000';
+      const appUrl = this.configService.get<string>('APP_URL') || 'https://carvajalfit.fydeli.com';
 
       const htmlContent = `
 <!DOCTYPE html>

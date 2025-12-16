@@ -10,7 +10,7 @@ Crea un entorno en Postman y agrega estas variables:
 
 | Variable | Valor Inicial | Descripción |
 |----------|---------------|-------------|
-| `base_url` | `http://localhost:3000` | URL base de la API |
+| `base_url` | `https://carvajalfit.fydeli.com` | URL base de la API |
 | `access_token` | (vacío) | Se llenará automáticamente después del login |
 | `refresh_token` | (vacío) | Se llenará automáticamente después del login |
 

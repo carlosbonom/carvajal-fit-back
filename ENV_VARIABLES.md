@@ -36,9 +36,9 @@ PORT=3001
 CORS_ORIGIN=
 
 # URL de tu aplicación (usada para callbacks de Mercado Pago)
-# Desarrollo: http://localhost:3000
+# Desarrollo: https://carvajalfit.fydeli.com
 # Producción: https://tu-dominio.com
-APP_URL=http://localhost:3000
+APP_URL=https://carvajalfit.fydeli.com
 
 # ============================================
 # CONFIGURACIÓN JWT (AUTENTICACIÓN)
@@ -163,7 +163,7 @@ LIOREN_API_KEY=tu_api_key_lioren
 |----------|-------------|---------|
 | `PORT` | Puerto donde corre el servidor | `3001` |
 | `CORS_ORIGIN` | Origen permitido para CORS | `https://tu-dominio.com` o vacío |
-| `APP_URL` | URL base de tu aplicación | `http://localhost:3000` |
+| `APP_URL` | URL base de tu aplicación | `https://carvajalfit.fydeli.com` |
 
 ### JWT (Autenticación)
 

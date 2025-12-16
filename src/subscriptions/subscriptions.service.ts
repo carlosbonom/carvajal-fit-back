@@ -1029,7 +1029,7 @@ export class SubscriptionsService {
     const buyOrder = `SUB-${savedSubscription.id.substring(0, 8).toUpperCase()}-${Date.now()}`;
     const sessionId = user.id;
     const amount = Math.round(parseFloat(price.amount.toString())); // WebPay requiere monto entero
-    const returnUrl = `${process.env.APP_URL || 'http://localhost:3000'}/checkout/success?subscriptionId=${savedSubscription.id}`;
+    const returnUrl = `${process.env.APP_URL || 'https://carvajalfit.fydeli.com'}/checkout/success?subscriptionId=${savedSubscription.id}`;
 
     const webpayResponse = await this.webpayService.createTransaction({
       buyOrder,
@@ -1150,7 +1150,7 @@ export class SubscriptionsService {
         return {
           success: true,
           subscription,
-          redirectUrl: `${process.env.APP_URL || 'http://localhost:3000'}/club`,
+          redirectUrl: `${process.env.APP_URL || 'https://carvajalfit.fydeli.com'}/club`,
         };
       }
 
@@ -1213,7 +1213,7 @@ export class SubscriptionsService {
       return {
         success: true,
         subscription,
-        redirectUrl: transactionResult.urlRedirection || `${process.env.APP_URL || 'http://localhost:3000'}/club`,
+        redirectUrl: transactionResult.urlRedirection || `${process.env.APP_URL || 'https://carvajalfit.fydeli.com'}/club`,
       };
     } catch (error: any) {
       console.error('Error al validar pago WebPay:', error);
@@ -1303,7 +1303,7 @@ export class SubscriptionsService {
     const savedSubscription = await this.userSubscriptionRepository.save(userSubscription);
 
     // Crear la orden en PayPal
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const appUrl = process.env.APP_URL || 'https://carvajalfit.fydeli.com';
     const returnUrl = `${appUrl}/checkout/success?subscriptionId=${savedSubscription.id}&paymentProvider=paypal`;
     const cancelUrl = `${appUrl}/checkout?canceled=true`;
 
@@ -1441,7 +1441,7 @@ export class SubscriptionsService {
         return {
           success: true,
           subscription,
-          redirectUrl: `${process.env.APP_URL || 'http://localhost:3000'}/club`,
+          redirectUrl: `${process.env.APP_URL || 'https://carvajalfit.fydeli.com'}/club`,
         };
       }
 
@@ -1509,7 +1509,7 @@ export class SubscriptionsService {
       return {
         success: true,
         subscription,
-        redirectUrl: `${process.env.APP_URL || 'http://localhost:3000'}/club`,
+        redirectUrl: `${process.env.APP_URL || 'https://carvajalfit.fydeli.com'}/club`,
       };
     } catch (error: any) {
       console.error('Error al validar pago PayPal:', error);
@@ -1622,7 +1622,7 @@ export class SubscriptionsService {
     const savedSubscription = await this.userSubscriptionRepository.save(userSubscription);
 
     // Crear la preferencia de pago en Mercado Pago
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const appUrl = process.env.APP_URL || 'https://carvajalfit.fydeli.com';
     const returnUrl = `${appUrl}/checkout/success?subscriptionId=${savedSubscription.id}&paymentProvider=mercadopago`;
     const cancelUrl = `${appUrl}/checkout?canceled=true`;
 
@@ -1733,7 +1733,7 @@ export class SubscriptionsService {
         return {
           success: true,
           subscription,
-          redirectUrl: `${process.env.APP_URL || 'http://localhost:3000'}/club`,
+          redirectUrl: `${process.env.APP_URL || 'https://carvajalfit.fydeli.com'}/club`,
         };
       }
 
@@ -1792,7 +1792,7 @@ export class SubscriptionsService {
       return {
         success: true,
         subscription,
-        redirectUrl: `${process.env.APP_URL || 'http://localhost:3000'}/club`,
+        redirectUrl: `${process.env.APP_URL || 'https://carvajalfit.fydeli.com'}/club`,
       };
     } catch (error: any) {
       console.error('Error al validar pago Mercado Pago:', error);

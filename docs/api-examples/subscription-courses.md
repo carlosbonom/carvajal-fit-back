@@ -78,7 +78,7 @@ interface CourseWithContent {
 // Función para obtener cursos
 async function getSubscriptionCourses(token: string): Promise<CourseWithContent[]> {
   try {
-    const response = await fetch('http://localhost:3000/courses/subscription', {
+    const response = await fetch('https://carvajalfit.fydeli.com/courses/subscription', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -150,7 +150,7 @@ export function useSubscriptionCourses(token: string | null): UseSubscriptionCou
       setLoading(true);
       setError(null);
 
-      const response = await fetch('http://localhost:3000/courses/subscription', {
+      const response = await fetch('https://carvajalfit.fydeli.com/courses/subscription', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -245,7 +245,7 @@ function CoursesPage() {
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:3000',
+  baseURL: 'https://carvajalfit.fydeli.com',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -294,7 +294,7 @@ getSubscriptionCourses()
 ### 4. cURL
 
 ```bash
-curl -X GET "http://localhost:3000/courses/subscription" \
+curl -X GET "https://carvajalfit.fydeli.com/courses/subscription" \
   -H "Authorization: Bearer TU_TOKEN_JWT_AQUI" \
   -H "Content-Type: application/json"
 ```
@@ -305,7 +305,7 @@ curl -X GET "http://localhost:3000/courses/subscription" \
 
 **Request:**
 - Method: `GET`
-- URL: `http://localhost:3000/courses/subscription`
+- URL: `https://carvajalfit.fydeli.com/courses/subscription`
 - Headers:
   - `Authorization`: `Bearer TU_TOKEN_JWT_AQUI`
   - `Content-Type`: `application/json`

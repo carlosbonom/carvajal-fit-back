@@ -115,7 +115,7 @@ export class MercadoPagoService {
           transaction_amount: transactionAmount,
           currency_id: data.currency,
         },
-        back_url: data.backUrl || `${this.configService.get<string>('APP_URL', 'http://localhost:3000')}/subscriptions/callback`,
+        back_url: data.backUrl || `${this.configService.get<string>('APP_URL', 'https://carvajalfit.fydeli.com')}/subscriptions/callback`,
       };
 
       // Si hay card_token_id, es una suscripción con pago autorizado

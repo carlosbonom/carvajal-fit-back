@@ -82,7 +82,7 @@ export class MercadoPagoCheckoutService {
         back_urls: backUrls,
         // Quitar auto_return porque Mercado Pago tiene problemas con localhost cuando se usa auto_return
         // El usuario será redirigido automáticamente usando back_urls
-        notification_url: `${process.env.APP_URL || 'http://localhost:3000'}/subscriptions/mercadopago/webhook`,
+        notification_url: `${process.env.APP_URL || 'https://carvajalfit.fydeli.com'}/subscriptions/mercadopago/webhook`,
         statement_descriptor: 'Carvajal Fit',
         payment_methods: {
           excluded_payment_methods: [],
