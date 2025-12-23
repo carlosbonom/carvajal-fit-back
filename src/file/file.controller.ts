@@ -27,7 +27,7 @@ export class FileController {
                 },
             }),
             limits: {
-                fileSize: 1024 * 1024 * 1024, // 1GB
+                fileSize: 2 * 1024 * 1024 * 1024, // 2GB
             },
         })
     )
@@ -35,7 +35,7 @@ export class FileController {
         @UploadedFile(
             new ParseFilePipe({
                 validators: [
-                    new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 1024 }), // 1GB
+                    new MaxFileSizeValidator({ maxSize: 2 * 1024 * 1024 * 1024 }), // 2GB
                     new CustomFileTypeValidator({ 
                         fileType: /^(video|image|application|audio|text)\// 
                     }),

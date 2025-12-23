@@ -3,11 +3,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { SubscriptionsController } from './subscriptions.controller';
 import { SubscriptionsService } from './subscriptions.service';
 import { MercadoPagoService } from './mercado-pago.service';
-import { MercadoPagoCheckoutService } from './mercado-pago-checkout.service';
-import { WebpayService } from './webpay.service';
-import { PayPalService } from './paypal.service';
+// Services moved to PaymentsModule
 import { MarketingModule } from '../marketing/marketing.module';
 import { LiorenModule } from '../lioren/lioren.module';
+import { PaymentsModule } from '../payments/payments.module';
 import { SubscriptionPlan } from '../database/entities/subscription-plans.entity';
 import { SubscriptionPrice } from '../database/entities/subscription-prices.entity';
 import { UserSubscription } from '../database/entities/user-subscriptions.entity';
@@ -31,10 +30,11 @@ import { Content } from '../database/entities/content.entity';
     ]),
     MarketingModule,
     LiorenModule,
+    PaymentsModule,
   ],
   controllers: [SubscriptionsController],
-  providers: [SubscriptionsService, MercadoPagoService, MercadoPagoCheckoutService, WebpayService, PayPalService],
+  providers: [SubscriptionsService, MercadoPagoService],
   exports: [SubscriptionsService],
 })
-export class SubscriptionsModule {}
+export class SubscriptionsModule { }
 

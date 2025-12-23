@@ -28,3 +28,7 @@ COMMENT ON COLUMN success_stories.created_at IS 'Fecha de creación del registro
 COMMENT ON COLUMN success_stories.updated_at IS 'Fecha de última actualización del registro';
 
 
+
+
+
+

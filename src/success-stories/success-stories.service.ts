@@ -15,7 +15,7 @@ export class SuccessStoriesService {
   constructor(
     @InjectRepository(SuccessStory)
     private readonly successStoryRepository: Repository<SuccessStory>,
-  ) {}
+  ) { }
 
   async getAll(): Promise<SuccessStoryDto[]> {
     const stories = await this.successStoryRepository.find({
@@ -86,6 +86,23 @@ export class SuccessStoriesService {
     }
 
     await this.successStoryRepository.remove(story);
+  }
+
+  async updateSuccessStoryOrder(
+    id: string,
+    sortOrder: number,
+  ): Promise<SuccessStoryDto> {
+    const story = await this.successStoryRepository.findOne({
+      where: { id },
+    });
+
+    if (!story) {
+      throw new NotFoundException(`Caso de éxito con ID ${id} no encontrado`);
+    }
+
+    story.sortOrder = sortOrder;
+    const updated = await this.successStoryRepository.save(story);
+    return this.toDto(updated);
   }
 
   private toDto(story: SuccessStory): SuccessStoryDto {

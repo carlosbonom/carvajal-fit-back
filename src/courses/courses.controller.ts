@@ -75,6 +75,15 @@ export class CoursesController {
     return this.coursesService.updateCourse(id, updateCourseDto);
   }
 
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteCourse(
+    @Param('id') id: string,
+  ): Promise<void> {
+    return this.coursesService.deleteCourse(id);
+  }
+
   @Patch(':id/order')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
@@ -157,6 +166,15 @@ export class CoursesController {
     @Body() updateStatusDto: UpdateContentStatusDto,
   ): Promise<ContentResponseDto> {
     return this.coursesService.updateContentStatus(contentId, updateStatusDto.isActive);
+  }
+
+  @Delete('content/:contentId')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteContent(
+    @Param('contentId') contentId: string,
+  ): Promise<void> {
+    return this.coursesService.deleteContent(contentId);
   }
 
   @Post('content/:contentId/resources')

@@ -18,7 +18,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../auth/guards/non-admin.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../database/entities/users.entity';
-import { SubscriptionPlansResponseDto, SubscriptionPlanDto } from './dto/subscription-plan-response.dto';
+import { SubscriptionPlansResponseDto, SubscriptionPlanDto, SubscriptionPriceDto } from './dto/subscription-plan-response.dto';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { UpdateSubscriptionPlanDto } from './dto/update-subscription-plan.dto';
 import { SubscriptionResponseDto } from './dto/subscription-response.dto';
@@ -52,6 +52,16 @@ export class SubscriptionsController {
     @Body() updateDto: UpdateSubscriptionPlanDto,
   ): Promise<SubscriptionPlanDto> {
     return this.subscriptionsService.updateSubscriptionPlan(id, updateDto);
+  }
+
+  @Put('prices/:id')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async updatePrice(
+    @Param('id') id: string,
+    @Body() body: { amount: number },
+  ): Promise<SubscriptionPriceDto> {
+    return this.subscriptionsService.updatePrice(id, body.amount);
   }
 
   @Post('subscribe')

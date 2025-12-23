@@ -72,3 +72,7 @@ export class UpdateProductDto {
   metadata?: Record<string, any>;
 }
 
+
+
+
+

@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -15,11 +16,12 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Public } from '../auth/decorators/public.decorator';
 import { CreateSuccessStoryDto } from './dto/create-success-story.dto';
 import { UpdateSuccessStoryDto } from './dto/update-success-story.dto';
+import { UpdateSuccessStoryOrderDto } from './dto/update-success-story-order.dto';
 import { SuccessStoryDto, SuccessStoriesResponseDto } from './dto/success-story-response.dto';
 
 @Controller('success-stories')
 export class SuccessStoriesController {
-  constructor(private readonly successStoriesService: SuccessStoriesService) {}
+  constructor(private readonly successStoriesService: SuccessStoriesService) { }
 
   @Public()
   @Get()
@@ -63,6 +65,16 @@ export class SuccessStoriesController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async delete(@Param('id') id: string): Promise<void> {
     return this.successStoriesService.delete(id);
+  }
+
+  @Patch(':id/order')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async updateOrder(
+    @Param('id') id: string,
+    @Body() updateOrderDto: UpdateSuccessStoryOrderDto,
+  ): Promise<SuccessStoryDto> {
+    return this.successStoriesService.updateSuccessStoryOrder(id, updateOrderDto.sortOrder);
   }
 }
 

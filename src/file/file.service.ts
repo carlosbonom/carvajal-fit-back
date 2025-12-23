@@ -79,8 +79,9 @@ export class FileService {
             try {
               await this.s3Client.send(command);
               if (isPublic) {
-                // return `https://cdn.grupoaleurca.cl/${key}`;
-                return `https://melli.fydeli.com/${key}`;
+                // Codificar el key para que los espacios y caracteres especiales sean válidos en la URL
+                const encodedKey = encodeURI(key);
+                return `https://melli.fydeli.com/${encodedKey}`;
       
               } else {
                 // Para archivos privados, retornamos solo la key

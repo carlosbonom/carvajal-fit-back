@@ -12,6 +12,8 @@ import { MarketingModule } from './marketing/marketing.module';
 import { SuccessStoriesModule } from './success-stories/success-stories.module';
 import { ProductsModule } from './products/products.module';
 import { LiorenModule } from './lioren/lioren.module';
+import { MarketModule } from './market/market.module';
+import { ClubConfigModule } from './club-config/club-config.module';
 
 @Module({
   imports: [
@@ -30,8 +32,10 @@ import { LiorenModule } from './lioren/lioren.module';
     SuccessStoriesModule,
     ProductsModule,
     LiorenModule,
+    MarketModule,
+    ClubConfigModule
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }

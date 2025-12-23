@@ -17,9 +17,9 @@ import { UserSubscriptionDto, BillingCycleInfoDto } from './dto/user-subscriptio
 import { CancelSubscriptionDto } from './dto/cancel-subscription.dto';
 import { UpdateSubscriptionPlanDto } from './dto/update-subscription-plan.dto';
 import { MercadoPagoService } from './mercado-pago.service';
-import { MercadoPagoCheckoutService } from './mercado-pago-checkout.service';
-import { WebpayService } from './webpay.service';
-import { PayPalService } from './paypal.service';
+import { MercadoPagoCheckoutService } from '../payments/mercado-pago-checkout.service';
+import { WebpayService } from '../payments/webpay.service';
+import { PayPalService } from '../payments/paypal.service';
 import { SubscriptionPayment, PaymentStatus } from '../database/entities/subscription-payments.entity';
 import { UserContentProgress } from '../database/entities/user-content-progress.entity';
 import { Content } from '../database/entities/content.entity';
@@ -162,6 +162,44 @@ export class SubscriptionsService {
       features: updatedPlan.features || [],
       prices: priceDtos,
     } as SubscriptionPlanDto;
+  }
+
+  async updatePrice(
+    priceId: string,
+    amount: number,
+  ): Promise<SubscriptionPriceDto> {
+    // Buscar el precio existente
+    const price = await this.subscriptionPriceRepository.findOne({
+      where: { id: priceId },
+      relations: ['billingCycle'],
+    });
+
+    if (!price) {
+      throw new NotFoundException(`Precio con ID ${priceId} no encontrado`);
+    }
+
+    // Validar que el monto sea válido
+    if (amount < 0) {
+      throw new BadRequestException('El monto debe ser mayor o igual a 0');
+    }
+
+    // Actualizar el monto
+    price.amount = amount;
+    await this.subscriptionPriceRepository.save(price);
+
+    // Retornar el precio actualizado
+    return {
+      id: price.id,
+      currency: price.currency,
+      amount: parseFloat(price.amount.toString()),
+      billingCycle: {
+        id: price.billingCycle.id,
+        name: price.billingCycle.name,
+        slug: price.billingCycle.slug,
+        intervalType: price.billingCycle.intervalType,
+        intervalCount: price.billingCycle.intervalCount,
+      } as BillingCycleDto,
+    };
   }
 
   async createSubscription(

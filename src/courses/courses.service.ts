@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
@@ -70,6 +71,24 @@ export class CoursesService {
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,
     }));
+  }
+
+  async deleteCourse(id: string): Promise<void> {
+    const course = await this.courseRepository.findOne({
+      where: { id },
+    });
+
+    if (!course) {
+      throw new NotFoundException(`Curso con ID ${id} no encontrado`);
+    }
+
+    try {
+      await this.courseRepository.remove(course);
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'No se pudo eliminar el curso. Verifica si tiene contenidos o relaciones asociadas.',
+      );
+    }
   }
 
   async getCourseById(id: string): Promise<CourseResponseDto> {
@@ -776,6 +795,18 @@ export class CoursesService {
       createdAt: updatedContent.createdAt,
       updatedAt: updatedContent.updatedAt,
     };
+  }
+
+  async deleteContent(contentId: string): Promise<void> {
+    const content = await this.contentRepository.findOne({
+      where: { id: contentId },
+    });
+
+    if (!content) {
+      throw new NotFoundException(`Contenido con ID ${contentId} no encontrado`);
+    }
+
+    await this.contentRepository.remove(content);
   }
 
   async getSubscriptionCourses(user: User): Promise<CourseWithContentResponseDto[]> {
