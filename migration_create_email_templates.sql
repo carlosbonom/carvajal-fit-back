@@ -33,3 +33,4 @@ COMMENT ON COLUMN email_templates.updated_at IS 'Fecha de última actualización
 
 
 
+

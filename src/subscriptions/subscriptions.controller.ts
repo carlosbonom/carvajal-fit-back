@@ -64,6 +64,14 @@ export class SubscriptionsController {
     return this.subscriptionsService.updatePrice(id, body.amount);
   }
 
+  @Get('current')
+  @UseGuards(JwtAuthGuard)
+  async getCurrentSubscription(
+    @CurrentUser() user: User,
+  ): Promise<UserSubscriptionDto | null> {
+    return this.subscriptionsService.getUserSubscription(user.id);
+  }
+
   @Post('subscribe')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)

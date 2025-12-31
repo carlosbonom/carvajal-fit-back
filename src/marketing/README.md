@@ -192,3 +192,4 @@ O si usas TypeORM con `TYPEORM_SYNC=true`, la tabla se creará automáticamente.
 
 
 
+

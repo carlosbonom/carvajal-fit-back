@@ -14,6 +14,8 @@ import { ProductsModule } from './products/products.module';
 import { LiorenModule } from './lioren/lioren.module';
 import { MarketModule } from './market/market.module';
 import { ClubConfigModule } from './club-config/club-config.module';
+import { CommentsModule } from './comments/comments.module';
+import { UserProgressModule } from './user-progress/user-progress.module';
 
 @Module({
   imports: [
@@ -33,7 +35,9 @@ import { ClubConfigModule } from './club-config/club-config.module';
     ProductsModule,
     LiorenModule,
     MarketModule,
-    ClubConfigModule
+    ClubConfigModule,
+    CommentsModule,
+    UserProgressModule
   ],
   controllers: [AppController],
   providers: [AppService],

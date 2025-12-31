@@ -54,6 +54,15 @@ export class User {
 
   @Column({
     type: 'varchar',
+    length: 2,
+    default: 'kg',
+    nullable: false,
+    name: 'preferred_weight_unit',
+  })
+  preferredWeightUnit: string;
+
+  @Column({
+    type: 'varchar',
     default: UserRole.CUSTOMER,
     nullable: false,
   })
