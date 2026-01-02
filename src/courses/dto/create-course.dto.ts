@@ -63,5 +63,9 @@ export class CreateCourseDto {
   @IsOptional()
   @IsString({ message: 'El ID del creator debe ser una cadena válida' })
   creatorId?: string;
+
+  @IsOptional()
+  @IsString({ message: 'El ID de la categoría debe ser una cadena válida' })
+  categoryId?: string;
 }
 

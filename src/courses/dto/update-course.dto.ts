@@ -68,6 +68,10 @@ export class UpdateCourseDto {
   creatorId?: string;
 
   @IsOptional()
+  @IsString({ message: 'El ID de la categoría debe ser una cadena válida' })
+  categoryId?: string | null;
+
+  @IsOptional()
   @IsObject({ message: 'El metadata debe ser un objeto válido' })
   metadata?: Record<string, any>;
 }

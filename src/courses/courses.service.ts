@@ -14,6 +14,7 @@ import { Creator } from '../database/entities/creators.entity';
 import { UserSubscription, SubscriptionStatus } from '../database/entities/user-subscriptions.entity';
 import { User, UserRole } from '../database/entities/users.entity';
 import { UserContentProgress } from '../database/entities/user-content-progress.entity';
+import { CourseCategory } from '../database/entities/course-categories.entity';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { CreateContentDto } from './dto/create-content.dto';
 import { CreateContentResourceDto } from './dto/create-content-resource.dto';
@@ -39,12 +40,14 @@ export class CoursesService {
     private readonly userSubscriptionRepository: Repository<UserSubscription>,
     @InjectRepository(UserContentProgress)
     private readonly userContentProgressRepository: Repository<UserContentProgress>,
+    @InjectRepository(CourseCategory)
+    private readonly courseCategoryRepository: Repository<CourseCategory>,
     private readonly fileService: FileService,
   ) {}
 
   async getAllCourses(): Promise<CourseResponseDto[]> {
     const courses = await this.courseRepository.find({
-      relations: ['creator'],
+      relations: ['creator', 'category'],
       order: { sortOrder: 'ASC', createdAt: 'DESC' },
     });
 
@@ -66,6 +69,13 @@ export class CoursesService {
             id: course.creator.id,
             name: course.creator.name,
             slug: course.creator.slug,
+          }
+        : null,
+      category: course.category
+        ? {
+            id: course.category.id,
+            name: course.category.name,
+            slug: course.category.slug,
           }
         : null,
       createdAt: course.createdAt,
@@ -94,7 +104,7 @@ export class CoursesService {
   async getCourseById(id: string): Promise<CourseResponseDto> {
     const course = await this.courseRepository.findOne({
       where: { id },
-      relations: ['creator'],
+      relations: ['creator', 'category'],
     });
 
     if (!course) {
@@ -119,6 +129,13 @@ export class CoursesService {
             id: course.creator.id,
             name: course.creator.name,
             slug: course.creator.slug,
+          }
+        : null,
+      category: course.category
+        ? {
+            id: course.category.id,
+            name: course.category.name,
+            slug: course.category.slug,
           }
         : null,
       createdAt: course.createdAt,
@@ -191,6 +208,20 @@ export class CoursesService {
       }
     }
 
+    // Validar que la categoría existe si se proporciona
+    let category: CourseCategory | null = null;
+    if (createCourseDto.categoryId) {
+      category = await this.courseCategoryRepository.findOne({
+        where: { id: createCourseDto.categoryId },
+      });
+
+      if (!category) {
+        throw new NotFoundException(
+          `Categoría con ID ${createCourseDto.categoryId} no encontrada`,
+        );
+      }
+    }
+
     // Validar que el slug no esté en uso
     const existingCourse = await this.courseRepository.findOne({
       where: { slug: createCourseDto.slug },
@@ -215,33 +246,47 @@ export class CoursesService {
       publishedAt: createCourseDto.isPublished ? new Date() : null,
       sortOrder: createCourseDto.sortOrder ?? 0,
       creator: creator,
+      category: category,
     } as DeepPartial<Course>);
 
     const savedCourse = await this.courseRepository.save(course);
 
-    // Retornar el curso con la información del creator
+    // Obtener el curso guardado con relaciones
+    const courseWithRelations = await this.courseRepository.findOne({
+      where: { id: savedCourse.id },
+      relations: ['creator', 'category'],
+    });
+
+    // Retornar el curso con la información del creator y category
     return {
-      id: savedCourse.id,
-      title: savedCourse.title,
-      slug: savedCourse.slug,
-      description: savedCourse.description,
-      thumbnailUrl: savedCourse.thumbnailUrl,
-      trailerUrl: savedCourse.trailerUrl,
-      level: savedCourse.level,
-      durationMinutes: savedCourse.durationMinutes,
-      isPublished: savedCourse.isPublished,
-      publishedAt: savedCourse.publishedAt,
-      sortOrder: savedCourse.sortOrder,
-      metadata: savedCourse.metadata,
-      creator: savedCourse.creator
+      id: courseWithRelations!.id,
+      title: courseWithRelations!.title,
+      slug: courseWithRelations!.slug,
+      description: courseWithRelations!.description,
+      thumbnailUrl: courseWithRelations!.thumbnailUrl,
+      trailerUrl: courseWithRelations!.trailerUrl,
+      level: courseWithRelations!.level,
+      durationMinutes: courseWithRelations!.durationMinutes,
+      isPublished: courseWithRelations!.isPublished,
+      publishedAt: courseWithRelations!.publishedAt,
+      sortOrder: courseWithRelations!.sortOrder,
+      metadata: courseWithRelations!.metadata,
+      creator: courseWithRelations!.creator
         ? {
-            id: savedCourse.creator.id,
-            name: savedCourse.creator.name,
-            slug: savedCourse.creator.slug,
+            id: courseWithRelations!.creator.id,
+            name: courseWithRelations!.creator.name,
+            slug: courseWithRelations!.creator.slug,
           }
         : null,
-      createdAt: savedCourse.createdAt,
-      updatedAt: savedCourse.updatedAt,
+      category: courseWithRelations!.category
+        ? {
+            id: courseWithRelations!.category.id,
+            name: courseWithRelations!.category.name,
+            slug: courseWithRelations!.category.slug,
+          }
+        : null,
+      createdAt: courseWithRelations!.createdAt,
+      updatedAt: courseWithRelations!.updatedAt,
     };
   }
 
@@ -252,7 +297,7 @@ export class CoursesService {
     // Validar que el curso existe
     const course = await this.courseRepository.findOne({
       where: { id: courseId },
-      relations: ['creator'],
+      relations: ['creator', 'category'],
     });
 
     if (!course) {
@@ -263,29 +308,42 @@ export class CoursesService {
     course.sortOrder = sortOrder;
     const updatedCourse = await this.courseRepository.save(course);
 
+    // Obtener el curso actualizado con relaciones
+    const courseWithRelations = await this.courseRepository.findOne({
+      where: { id: updatedCourse.id },
+      relations: ['creator', 'category'],
+    });
+
     // Retornar el curso actualizado
     return {
-      id: updatedCourse.id,
-      title: updatedCourse.title,
-      slug: updatedCourse.slug,
-      description: updatedCourse.description,
-      thumbnailUrl: updatedCourse.thumbnailUrl,
-      trailerUrl: updatedCourse.trailerUrl,
-      level: updatedCourse.level,
-      durationMinutes: updatedCourse.durationMinutes,
-      isPublished: updatedCourse.isPublished,
-      publishedAt: updatedCourse.publishedAt,
-      sortOrder: updatedCourse.sortOrder,
-      metadata: updatedCourse.metadata,
-      creator: updatedCourse.creator
+      id: courseWithRelations!.id,
+      title: courseWithRelations!.title,
+      slug: courseWithRelations!.slug,
+      description: courseWithRelations!.description,
+      thumbnailUrl: courseWithRelations!.thumbnailUrl,
+      trailerUrl: courseWithRelations!.trailerUrl,
+      level: courseWithRelations!.level,
+      durationMinutes: courseWithRelations!.durationMinutes,
+      isPublished: courseWithRelations!.isPublished,
+      publishedAt: courseWithRelations!.publishedAt,
+      sortOrder: courseWithRelations!.sortOrder,
+      metadata: courseWithRelations!.metadata,
+      creator: courseWithRelations!.creator
         ? {
-            id: updatedCourse.creator.id,
-            name: updatedCourse.creator.name,
-            slug: updatedCourse.creator.slug,
+            id: courseWithRelations!.creator.id,
+            name: courseWithRelations!.creator.name,
+            slug: courseWithRelations!.creator.slug,
           }
         : null,
-      createdAt: updatedCourse.createdAt,
-      updatedAt: updatedCourse.updatedAt,
+      category: courseWithRelations!.category
+        ? {
+            id: courseWithRelations!.category.id,
+            name: courseWithRelations!.category.name,
+            slug: courseWithRelations!.category.slug,
+          }
+        : null,
+      createdAt: courseWithRelations!.createdAt,
+      updatedAt: courseWithRelations!.updatedAt,
     };
   }
 
@@ -296,7 +354,7 @@ export class CoursesService {
     // Validar que el curso existe
     const course = await this.courseRepository.findOne({
       where: { id },
-      relations: ['creator'],
+      relations: ['creator', 'category'],
     });
 
     if (!course) {
@@ -334,6 +392,24 @@ export class CoursesService {
       }
     }
 
+    // Validar que la categoría existe si se proporciona
+    if (updateCourseDto.categoryId !== undefined) {
+      if (updateCourseDto.categoryId) {
+        const category = await this.courseCategoryRepository.findOne({
+          where: { id: updateCourseDto.categoryId },
+        });
+
+        if (!category) {
+          throw new NotFoundException(
+            `Categoría con ID ${updateCourseDto.categoryId} no encontrada`,
+          );
+        }
+        course.category = category;
+      } else {
+        course.category = null;
+      }
+    }
+
     // Actualizar solo los campos proporcionados
     if (updateCourseDto.title !== undefined) course.title = updateCourseDto.title;
     if (updateCourseDto.slug !== undefined) course.slug = updateCourseDto.slug;
@@ -360,29 +436,42 @@ export class CoursesService {
 
     const updatedCourse = await this.courseRepository.save(course);
 
+    // Obtener el curso actualizado con relaciones
+    const courseWithRelations = await this.courseRepository.findOne({
+      where: { id: updatedCourse.id },
+      relations: ['creator', 'category'],
+    });
+
     // Retornar el curso actualizado
     return {
-      id: updatedCourse.id,
-      title: updatedCourse.title,
-      slug: updatedCourse.slug,
-      description: updatedCourse.description,
-      thumbnailUrl: updatedCourse.thumbnailUrl,
-      trailerUrl: updatedCourse.trailerUrl,
-      level: updatedCourse.level,
-      durationMinutes: updatedCourse.durationMinutes,
-      isPublished: updatedCourse.isPublished,
-      publishedAt: updatedCourse.publishedAt,
-      sortOrder: updatedCourse.sortOrder,
-      metadata: updatedCourse.metadata,
-      creator: updatedCourse.creator
+      id: courseWithRelations!.id,
+      title: courseWithRelations!.title,
+      slug: courseWithRelations!.slug,
+      description: courseWithRelations!.description,
+      thumbnailUrl: courseWithRelations!.thumbnailUrl,
+      trailerUrl: courseWithRelations!.trailerUrl,
+      level: courseWithRelations!.level,
+      durationMinutes: courseWithRelations!.durationMinutes,
+      isPublished: courseWithRelations!.isPublished,
+      publishedAt: courseWithRelations!.publishedAt,
+      sortOrder: courseWithRelations!.sortOrder,
+      metadata: courseWithRelations!.metadata,
+      creator: courseWithRelations!.creator
         ? {
-            id: updatedCourse.creator.id,
-            name: updatedCourse.creator.name,
-            slug: updatedCourse.creator.slug,
+            id: courseWithRelations!.creator.id,
+            name: courseWithRelations!.creator.name,
+            slug: courseWithRelations!.creator.slug,
           }
         : null,
-      createdAt: updatedCourse.createdAt,
-      updatedAt: updatedCourse.updatedAt,
+      category: courseWithRelations!.category
+        ? {
+            id: courseWithRelations!.category.id,
+            name: courseWithRelations!.category.name,
+            slug: courseWithRelations!.category.slug,
+          }
+        : null,
+      createdAt: courseWithRelations!.createdAt,
+      updatedAt: courseWithRelations!.updatedAt,
     };
   }
 
@@ -836,7 +925,7 @@ export class CoursesService {
     // Todos (incluidos admins) ven solo cursos publicados
     const courses = await this.courseRepository.find({
       where: { isPublished: true },
-      relations: ['creator'],
+      relations: ['creator', 'category'],
       order: { sortOrder: 'ASC', createdAt: 'DESC' },
     });
 
@@ -874,6 +963,13 @@ export class CoursesService {
                 id: course.creator.id,
                 name: course.creator.name,
                 slug: course.creator.slug,
+              }
+            : null,
+          category: course.category
+            ? {
+                id: course.category.id,
+                name: course.category.name,
+                slug: course.category.slug,
               }
             : null,
           createdAt: course.createdAt,

@@ -9,6 +9,7 @@ import {
   Check,
 } from 'typeorm';
 import { Creator } from './creators.entity';
+import { CourseCategory } from './course-categories.entity';
 
 export enum CourseLevel {
   BEGINNER = 'beginner',
@@ -25,6 +26,10 @@ export class Course {
   @ManyToOne(() => Creator, { nullable: true, onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'creator_id' })
   creator: Creator | null;
+
+  @ManyToOne(() => CourseCategory, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'category_id' })
+  category: CourseCategory | null;
 
   @Column({ type: 'varchar', nullable: false })
   title: string;

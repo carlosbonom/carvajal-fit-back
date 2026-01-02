@@ -16,6 +16,7 @@ import { MarketModule } from './market/market.module';
 import { ClubConfigModule } from './club-config/club-config.module';
 import { CommentsModule } from './comments/comments.module';
 import { UserProgressModule } from './user-progress/user-progress.module';
+import { CourseCategoriesModule } from './course-categories/course-categories.module';
 
 @Module({
   imports: [
@@ -37,7 +38,8 @@ import { UserProgressModule } from './user-progress/user-progress.module';
     MarketModule,
     ClubConfigModule,
     CommentsModule,
-    UserProgressModule
+    UserProgressModule,
+    CourseCategoriesModule
   ],
   controllers: [AppController],
   providers: [AppService],

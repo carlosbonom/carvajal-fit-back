@@ -18,6 +18,11 @@ export class CourseResponseDto {
     name: string;
     slug: string;
   } | null;
+  category: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
   createdAt: Date;
   updatedAt: Date;
 }
