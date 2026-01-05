@@ -21,7 +21,7 @@ export class CourseResponseDto {
   category: {
     id: string;
     name: string;
-    slug: string;
+    slug: string | null;
   } | null;
   createdAt: Date;
   updatedAt: Date;

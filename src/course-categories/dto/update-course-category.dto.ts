@@ -3,6 +3,7 @@ import {
   IsOptional,
   IsInt,
   IsBoolean,
+  IsUUID,
   MinLength,
   MaxLength,
   Min,
@@ -32,5 +33,9 @@ export class UpdateCourseCategoryDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'El ID de la categoría padre debe ser un UUID válido' })
+  parentId?: string | null;
 }
 

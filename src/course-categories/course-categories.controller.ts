@@ -19,7 +19,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('course-categories')
 export class CourseCategoriesController {
-  constructor(private readonly courseCategoriesService: CourseCategoriesService) {}
+  constructor(private readonly courseCategoriesService: CourseCategoriesService) { }
 
   @Get()
   @UseGuards(JwtAuthGuard)
@@ -31,6 +31,12 @@ export class CourseCategoriesController {
   @UseGuards(JwtAuthGuard)
   async getCategoryById(@Param('id') id: string): Promise<CourseCategoryResponseDto> {
     return this.courseCategoriesService.getCategoryById(id);
+  }
+
+  @Get('slug/:slug')
+  @UseGuards(JwtAuthGuard)
+  async getCategoryBySlug(@Param('slug') slug: string): Promise<CourseCategoryResponseDto> {
+    return this.courseCategoriesService.getCategoryBySlug(slug);
   }
 
   @Post()
