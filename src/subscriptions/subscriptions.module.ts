@@ -14,7 +14,7 @@ import { BillingCycle } from '../database/entities/billing-cycles.entity';
 import { SubscriptionPayment } from '../database/entities/subscription-payments.entity';
 import { User } from '../database/entities/users.entity';
 import { UserContentProgress } from '../database/entities/user-content-progress.entity';
-import { Content } from '../database/entities/content.entity';
+import { SubscriptionsReminderService } from './subscriptions-reminder.service';
 
 @Module({
   imports: [
@@ -33,7 +33,7 @@ import { Content } from '../database/entities/content.entity';
     PaymentsModule,
   ],
   controllers: [SubscriptionsController],
-  providers: [SubscriptionsService, MercadoPagoService],
+  providers: [SubscriptionsService, MercadoPagoService, SubscriptionsReminderService],
   exports: [SubscriptionsService],
 })
 export class SubscriptionsModule { }

@@ -33,9 +33,22 @@ import { CreatePayPalOrderDto, ValidatePayPalPaymentDto } from './dto/create-pay
 import { VerifyPayPalCaptureDto } from './dto/verify-paypal-capture.dto';
 import { CreateMercadoPagoCheckoutDto, ValidateMercadoPagoPaymentDto } from './dto/create-mercadopago-checkout.dto';
 
+import { SubscriptionsReminderService } from './subscriptions-reminder.service';
+
 @Controller('subscriptions')
 export class SubscriptionsController {
-  constructor(private readonly subscriptionsService: SubscriptionsService) {}
+  constructor(
+    private readonly subscriptionsService: SubscriptionsService,
+    private readonly reminderService: SubscriptionsReminderService,
+  ) { }
+
+  @Post('maintenance')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @HttpCode(HttpStatus.OK)
+  async triggerMaintenance() {
+    await this.reminderService.handleSubscriptionMaintenance();
+    return { message: 'Mantenimiento de suscripciones iniciado correctamente' };
+  }
 
   @Public()
   @Get('plans')

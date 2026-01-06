@@ -17,9 +17,11 @@ import { ClubConfigModule } from './club-config/club-config.module';
 import { CommentsModule } from './comments/comments.module';
 import { UserProgressModule } from './user-progress/user-progress.module';
 import { CourseCategoriesModule } from './course-categories/course-categories.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
