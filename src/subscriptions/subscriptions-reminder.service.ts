@@ -57,7 +57,7 @@ export class SubscriptionsReminderService {
                     order: { createdAt: 'DESC' },
                 });
 
-                const paymentLink = `\${appUrl}/payment/\${lastPayment?.id || sub.id}`;
+                const paymentLink = `${appUrl}/payment/${lastPayment?.id || sub.id}`;
 
                 // Lógica de recordatorios:
                 // - 1 día antes del vencimiento (diffInDays === 1)
@@ -71,13 +71,13 @@ export class SubscriptionsReminderService {
 
                 if (diffInDays === 1) {
                     shouldSendEmail = true;
-                    this.logger.log(`Enviando recordatorio 1 día antes a: \${sub.user.email}`);
+                    this.logger.log(`Enviando recordatorio 1 día antes a: ${sub.user.email}`);
                 } else if (diffInDays === 0) {
                     shouldSendEmail = true;
-                    this.logger.log(`Enviando recordatorio de vencimiento hoy a: \${sub.user.email}`);
+                    this.logger.log(`Enviando recordatorio de vencimiento hoy a: ${sub.user.email}`);
                 } else if (diffInDays < 0 && diffInDays >= -5) {
                     shouldSendEmail = true;
-                    this.logger.log(`Enviando recordatorio \${daysToWait} día(s) después del vencimiento a: \${sub.user.email}`);
+                    this.logger.log(`Enviando recordatorio ${daysToWait} día(s) después del vencimiento a: ${sub.user.email}`);
 
                     // Si llegamos al límite de 5 veces (diffInDays === -5), suspender
                     if (diffInDays === -5) {
@@ -101,28 +101,21 @@ export class SubscriptionsReminderService {
 
                     const subject = isSuspended
                         ? 'Suscripción Suspendida - Club Carvajal Fit'
-                        : `Recordatorio de Pago - Club Carvajal Fit (\${isExpired ? 'Vencida' : 'Próximo vencimiento'})`;
+                        : `Recordatorio de Pago - Club Carvajal Fit (${isExpired ? 'Vencida' : 'Próximo vencimiento'})`;
 
-                    await this.marketingService.sendBulkEmails({
-                        templateId: 'system-reminder', // Identificador interno mientas se crea la entidad si es necesario, 
-                        // pero aquí mejor usamos un método directo si MarketingService lo permite o implementamos uno simple
-                        subject: subject,
-                        recipients: [{
-                            email: sub.user.email,
-                            name: sub.user.name || ''
-                        }],
-                    }).catch(err => {
-                        // Nota: El método sendBulkEmails de MarketingService requiere un templateId de la DB.
-                        // Para correos de sistema, quizás necesitemos un método más directo en MarketingService
-                        // o simplemente usar resend directamente aquí si MarketingService es muy rígido.
-                        this.logger.error(`Error enviando email a \${sub.user.email}: \${err.message}`);
+                    await this.marketingService.sendEmail(
+                        sub.user.email,
+                        subject,
+                        htmlContent
+                    ).catch(err => {
+                        this.logger.error(`Error enviando email a ${sub.user.email}: ${err.message}`);
                     });
 
                     // Como MarketingService.sendBulkEmails busca en la DB, vamos a añadir un método de ayuda en MarketingService
                     // o usar resend aquí. Dado que se me pidió usar Resend y ya está instalado.
                 }
             } catch (error) {
-                this.logger.error(`Error procesando suscripción \${sub.id}: \${error.message}`);
+                this.logger.error(`Error procesando suscripción ${sub.id}: ${error.message}`);
             }
         }
     }

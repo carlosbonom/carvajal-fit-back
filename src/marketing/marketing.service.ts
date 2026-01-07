@@ -92,7 +92,7 @@ export class MarketingService {
     const batchSize = 10;
     for (let i = 0; i < sendDto.recipients.length; i += batchSize) {
       const batch = sendDto.recipients.slice(i, i + batchSize);
-      
+
       const promises = batch.map(async (recipient: EmailRecipientDto) => {
         try {
           // Preparar variables para reemplazo
@@ -105,7 +105,7 @@ export class MarketingService {
 
           // Reemplazar variables en el contenido y subject
           const htmlContent = this.replaceVariables(template.htmlContent, variables);
-          const subject = sendDto.subject 
+          const subject = sendDto.subject
             ? this.replaceVariables(sendDto.subject, variables)
             : this.replaceVariables(template.subject, variables);
 
@@ -276,6 +276,33 @@ export class MarketingService {
     } catch (error: any) {
       console.error(`Error al enviar email de bienvenida a ${userEmail}:`, error);
       // No lanzamos error para no interrumpir el flujo de activación de suscripción
+    }
+  }
+
+  /**
+   * Envía un email genérico usando Resend
+   */
+  async sendEmail(to: string, subject: string, html: string): Promise<void> {
+    if (!this.resend) {
+      console.warn('RESEND_API_KEY no está configurado. No se enviará el email.');
+      return;
+    }
+
+    try {
+      const fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL') || 'noreply@carvajalfit.com';
+      const fromName = this.configService.get<string>('RESEND_FROM_NAME') || 'Club Carvajal Fit';
+
+      await this.resend.emails.send({
+        from: `${fromName} <${fromEmail}>`,
+        to,
+        subject,
+        html,
+      });
+
+      console.log(`Email enviado exitosamente a ${to}`);
+    } catch (error: any) {
+      console.error(`Error al enviar email a ${to}:`, error);
+      throw error;
     }
   }
 }

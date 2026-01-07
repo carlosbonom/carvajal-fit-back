@@ -1,32 +1,32 @@
 export const getSubscriptionReminderTemplate = (
-    userName: string,
-    daysToWait: number,
-    paymentLink: string,
-    isExpired: boolean,
-    isSuspended: boolean = false,
+  userName: string,
+  daysToWait: number,
+  paymentLink: string,
+  isExpired: boolean,
+  isSuspended: boolean = false,
 ) => {
-    let title = '';
-    let message = '';
-    let buttonLabel = 'Renovar Membresía';
+  let title = '';
+  let message = '';
+  let buttonLabel = 'Renovar Membresía';
 
-    if (isSuspended) {
-        title = 'Suscripción Suspendida 🚫';
-        message = `Hola ${userName}, lamentamos informarte que tu suscripción ha sido suspendida debido a que no recibimos el pago tras varios intentos. Para recuperar el acceso, por favor realiza el pago en el siguiente enlace.`;
-        buttonLabel = 'Reactivar Membresía';
-    } else if (isExpired) {
-        if (daysToWait === 0) {
-            title = 'Tu suscripción vence hoy ⏳';
-            message = `Hola ${userName}, hoy vence tu suscripción al Club Carvajal Fit. No pierdas tu progreso y renueva hoy mismo para seguir disfrutando del contenido exclusivo.`;
-        } else {
-            title = `Suscripción vencida hace ${daysToWait} día(s) ⚠️`;
-            message = `Hola ${userName}, tu suscripción ha vencido. Te recordamos que tienes un plazo de gracia para realizar el pago antes de que el acceso sea suspendido. ¡No te quedes fuera!`;
-        }
+  if (isSuspended) {
+    title = 'Suscripción Suspendida 🚫';
+    message = `Hola ${userName}, lamentamos informarte que tu suscripción ha sido suspendida debido a que no recibimos el pago tras varios intentos. Para recuperar el acceso, por favor realiza el pago en el siguiente enlace.`;
+    buttonLabel = 'Reactivar Membresía';
+  } else if (isExpired) {
+    if (daysToWait === 0) {
+      title = 'Tu suscripción vence hoy ⏳';
+      message = `Hola ${userName}, hoy vence tu suscripción al Club Carvajal Fit. No pierdas tu progreso y renueva hoy mismo para seguir disfrutando del contenido exclusivo.`;
     } else {
-        title = 'Tu suscripción vence mañana 🔔';
-        message = `Hola ${userName}, te recordamos que tu suscripción al Club Carvajal Fit vencerá el día de mañana. Asegúrate de tener saldo en tu medio de pago o realiza la renovación manualmente.`;
+      title = `Suscripción vencida hace ${daysToWait} día(s) ⚠️`;
+      message = `Hola ${userName}, tu suscripción ha vencido. Te recordamos que tienes un plazo de gracia para realizar el pago antes de que el acceso sea suspendido. ¡No te quedes fuera!`;
     }
+  } else {
+    title = 'Tu suscripción vence mañana 🔔';
+    message = `Hola ${userName}, te recordamos que tu suscripción al Club Carvajal Fit vencerá el día de mañana. Asegúrate de tener saldo en tu medio de pago o realiza la renovación manualmente.`;
+  }
 
-    return `
+  return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -80,7 +80,7 @@ export const getSubscriptionReminderTemplate = (
           <tr>
             <td style="background-color: #1a1a1a; padding: 30px; text-align: center;">
               <p style="color: #666666; font-size: 12px; margin: 0;">
-                © \${new Date().getFullYear()} Club Carvajal Fit. Todos los derechos reservados.
+                © ${new Date().getFullYear()} Club Carvajal Fit. Todos los derechos reservados.
               </p>
             </td>
           </tr>
