@@ -32,6 +32,7 @@ import { CreateWebpayTransactionDto, ValidateWebpayPaymentDto } from './dto/crea
 import { CreatePayPalOrderDto, ValidatePayPalPaymentDto } from './dto/create-paypal-order.dto';
 import { VerifyPayPalCaptureDto } from './dto/verify-paypal-capture.dto';
 import { CreateMercadoPagoCheckoutDto, ValidateMercadoPagoPaymentDto } from './dto/create-mercadopago-checkout.dto';
+import { MigrateSubscribersDto } from './dto/migrate-subscribers.dto';
 
 import { SubscriptionsReminderService } from './subscriptions-reminder.service';
 
@@ -48,6 +49,15 @@ export class SubscriptionsController {
   async triggerMaintenance() {
     await this.reminderService.handleSubscriptionMaintenance();
     return { message: 'Mantenimiento de suscripciones iniciado correctamente' };
+  }
+
+  @Post('migrate')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @HttpCode(HttpStatus.OK)
+  async migrateSubscribers(
+    @Body() migrateDto: MigrateSubscribersDto,
+  ) {
+    return this.subscriptionsService.migrateSubscribers(migrateDto.subscribers);
   }
 
   @Public()
@@ -144,6 +154,12 @@ export class SubscriptionsController {
     return { payments };
   }
 
+  @Public()
+  @Get('payment-details/:id')
+  async getPaymentDetails(@Param('id') id: string) {
+    return this.subscriptionsService.getPaymentDetails(id);
+  }
+
   @Get('members')
   @UseGuards(JwtAuthGuard, AdminGuard)
   async getMembers(@Query() query: GetMembersQueryDto): Promise<MembersResponseDto> {
@@ -162,6 +178,7 @@ export class SubscriptionsController {
       createWebpayDto.planId,
       createWebpayDto.billingCycleId,
       createWebpayDto.currency,
+      createWebpayDto.subscriptionId,
     );
   }
 
@@ -233,6 +250,7 @@ export class SubscriptionsController {
       createPayPalDto.planId,
       createPayPalDto.billingCycleId,
       createPayPalDto.currency,
+      createPayPalDto.subscriptionId,
     );
   }
 
@@ -316,6 +334,7 @@ export class SubscriptionsController {
       createMercadoPagoDto.planId,
       createMercadoPagoDto.billingCycleId,
       createMercadoPagoDto.currency,
+      createMercadoPagoDto.subscriptionId,
     );
   }
 

@@ -12,6 +12,10 @@ export class CreateMercadoPagoCheckoutDto {
   @IsString()
   @IsOptional()
   currency?: string;
+
+  @IsUUID()
+  @IsOptional()
+  subscriptionId?: string;
 }
 
 export class ValidateMercadoPagoPaymentDto {

@@ -1,0 +1,54 @@
+{
+    "info": {
+        "name": "Carvajal Fit - Migration API",
+        "description": "Endpoint para migración masiva de suscriptores",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Migrate Subscribers",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{access_token}}",
+                        "type": "text"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"subscribers\": [\n    {\n      \"email\": \"usuario1@example.com\",\n      \"name\": \"Usuario Ejemplo 1\",\n      \"status\": \"active\",\n      \"startDate\": \"2024-01-01\",\n      \"lastActivationDate\": \"2024-12-01\",\n      \"planName\": \"Full\"\n    },\n    {\n      \"email\": \"usuario2@example.com\",\n      \"name\": \"Usuario Ejemplo 2\",\n      \"status\": \"paused\",\n      \"startDate\": \"2023-01-01\",\n      \"lastActivationDate\": \"2024-10-01\",\n      \"planName\": \"Full\"\n    }\n  ]\n}"
+                },
+                "url": {
+                    "raw": "{{base_url}}/subscriptions/migrate",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "subscriptions",
+                        "migrate"
+                    ]
+                },
+                "description": "Migra una lista de suscriptores. Requiere token de administrador."
+            },
+            "response": []
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:3001",
+            "type": "string"
+        },
+        {
+            "key": "access_token",
+            "value": "",
+            "type": "string"
+        }
+    ]
+}

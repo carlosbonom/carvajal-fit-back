@@ -111,8 +111,7 @@ export class SubscriptionsReminderService {
                         this.logger.error(`Error enviando email a ${sub.user.email}: ${err.message}`);
                     });
 
-                    // Como MarketingService.sendBulkEmails busca en la DB, vamos a añadir un método de ayuda en MarketingService
-                    // o usar resend aquí. Dado que se me pidió usar Resend y ya está instalado.
+
                 }
             } catch (error) {
                 this.logger.error(`Error procesando suscripción ${sub.id}: ${error.message}`);

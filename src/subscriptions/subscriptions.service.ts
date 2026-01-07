@@ -5,7 +5,7 @@ import { SubscriptionPlan } from '../database/entities/subscription-plans.entity
 import { SubscriptionPrice } from '../database/entities/subscription-prices.entity';
 import { UserSubscription, SubscriptionStatus } from '../database/entities/user-subscriptions.entity';
 import { BillingCycle } from '../database/entities/billing-cycles.entity';
-import { User } from '../database/entities/users.entity';
+import { User, UserRole, UserStatus } from '../database/entities/users.entity';
 import {
   SubscriptionPlanDto,
   SubscriptionPriceDto,
@@ -28,6 +28,7 @@ import { MembersResponseDto, MemberDto, MemberStatsDto } from './dto/members-res
 import { MarketingService } from '../marketing/marketing.service';
 import { LiorenService } from '../lioren/lioren.service';
 import { ConfigService } from '@nestjs/config';
+import { PasswordResetCode } from '../database/entities/password-reset-code.entity';
 
 @Injectable()
 export class SubscriptionsService {
@@ -48,6 +49,8 @@ export class SubscriptionsService {
     private readonly userContentProgressRepository: Repository<UserContentProgress>,
     @InjectRepository(Content)
     private readonly contentRepository: Repository<Content>,
+    @InjectRepository(PasswordResetCode)
+    private readonly passwordResetCodeRepository: Repository<PasswordResetCode>,
     private readonly mercadoPagoService: MercadoPagoService,
     private readonly mercadoPagoCheckoutService: MercadoPagoCheckoutService,
     private readonly webpayService: WebpayService,
@@ -55,7 +58,7 @@ export class SubscriptionsService {
     private readonly marketingService: MarketingService,
     private readonly liorenService: LiorenService,
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
   async getAvailablePlans(): Promise<SubscriptionPlanDto[]> {
     // Obtener todos los planes activos ordenados por sort_order
@@ -415,7 +418,7 @@ export class SubscriptionsService {
     // Cuando se autoriza un pago recurrente
     if (mpSubscription.status === 'authorized') {
       subscription.status = SubscriptionStatus.ACTIVE;
-      
+
       // Actualizar fechas del período si están disponibles
       if (mpSubscription.auto_recurring?.start_date) {
         subscription.currentPeriodStart = new Date(mpSubscription.auto_recurring.start_date);
@@ -440,12 +443,12 @@ export class SubscriptionsService {
   ): Promise<void> {
     // Cuando se procesa un pago recurrente
     // Mercado Pago envía automáticamente una notificación cada vez que se cobra (mes a mes, año a año)
-    
+
     try {
       // Obtener información del pago desde Mercado Pago
       // El notification.data.id puede ser el ID del pago o de la suscripción
       let paymentId = notification.data?.id;
-      
+
       // Si el tipo es 'payment', el ID es del pago directamente
       // Si es 'subscription_payment', necesitamos obtener el último pago de la suscripción
       if (notification.type === 'subscription_payment') {
@@ -459,11 +462,11 @@ export class SubscriptionsService {
       if (paymentId && notification.type === 'payment') {
         try {
           const mpPayment = await this.mercadoPagoService.getPayment(paymentId.toString());
-          
+
           // Verificar si el pago está relacionado con esta suscripción
-          if (mpPayment.external_reference === subscription.id || 
-              mpPayment.metadata?.subscription_id === subscription.mercadoPagoSubscriptionId) {
-            
+          if (mpPayment.external_reference === subscription.id ||
+            mpPayment.metadata?.subscription_id === subscription.mercadoPagoSubscriptionId) {
+
             // Buscar si ya existe un registro de pago con este transaction_id
             let paymentRecord = await this.subscriptionPaymentRepository.findOne({
               where: { transactionId: mpPayment.id?.toString() },
@@ -472,7 +475,7 @@ export class SubscriptionsService {
             if (!paymentRecord) {
               // Validar que el status existe
               const paymentStatus = mpPayment.status || 'pending';
-              
+
               // Crear nuevo registro de pago
               const newPayment = new SubscriptionPayment();
               newPayment.userSubscription = subscription;
@@ -490,7 +493,7 @@ export class SubscriptionsService {
                 mpPaymentData: mpPayment,
                 notificationType: notification.type,
               };
-              
+
               paymentRecord = await this.subscriptionPaymentRepository.save(newPayment);
 
               // Si el pago fue aprobado, actualizar el período de la suscripción
@@ -507,7 +510,7 @@ export class SubscriptionsService {
             } else {
               // Validar que el status existe
               const paymentStatus = mpPayment.status || 'pending';
-              
+
               // Actualizar el registro existente
               paymentRecord.status = this.mapMPPaymentStatusToOurStatus(paymentStatus);
               paymentRecord.paidAt = mpPayment.date_approved ? new Date(mpPayment.date_approved) : paymentRecord.paidAt;
@@ -563,15 +566,15 @@ export class SubscriptionsService {
       // Obtener RUT del usuario desde metadata del pago o suscripción, o usar un valor por defecto
       // NOTA: El RUT debería ser capturado durante el registro o checkout
       // Por ahora usamos un RUT genérico si no está disponible
-      const userRut = payment.metadata?.userRut || 
-                     subscription.metadata?.userRut || 
-                     this.configService.get<string>('LIOREN_DEFAULT_RUT') || 
-                     '111111111'; // RUT genérico por defecto
+      const userRut = payment.metadata?.userRut ||
+        subscription.metadata?.userRut ||
+        this.configService.get<string>('LIOREN_DEFAULT_RUT') ||
+        '111111111'; // RUT genérico por defecto
 
       const userName = subscription.user.name || subscription.user.email.split('@')[0];
       const planName = subscription.plan.name;
       const billingCycle = subscription.billingCycle.intervalType === 'month' ? 'mensual' : 'anual';
-      
+
       const descripcion = `Membresía ${planName} - ${billingCycle}`;
 
       const boletaData = await this.liorenService.generarBoletaMembresia(
@@ -722,6 +725,71 @@ export class SubscriptionsService {
       metadata: subscription.metadata,
       createdAt: subscription.createdAt,
       updatedAt: subscription.updatedAt,
+    };
+  }
+
+  async getPaymentDetails(id: string): Promise<any> {
+    // 1. Intentar buscar como SubscriptionPayment
+    const payment = await this.subscriptionPaymentRepository.findOne({
+      where: { id },
+      relations: ['userSubscription', 'userSubscription.plan', 'userSubscription.billingCycle', 'user'],
+    });
+
+    if (payment) {
+      return {
+        type: 'payment',
+        id: payment.id,
+        amount: Number(payment.amount),
+        currency: payment.currency,
+        status: payment.status,
+        planName: payment.userSubscription.plan.name,
+        billingCycle: payment.userSubscription.billingCycle.name,
+        userEmail: payment.user.email,
+        userName: payment.user.name,
+        createdAt: payment.createdAt,
+        subscriptionId: payment.userSubscription.id,
+      };
+    }
+
+    // 2. Intentar buscar como UserSubscription
+    const subscription = await this.userSubscriptionRepository.findOne({
+      where: { id },
+      relations: ['plan', 'billingCycle', 'user'],
+    });
+
+    if (!subscription) {
+      throw new NotFoundException('No se encontró información de pago o suscripción asociada al ID');
+    }
+
+    // Si es suscripción, buscar el precio actual
+    const price = await this.subscriptionPriceRepository.findOne({
+      where: {
+        plan: { id: subscription.plan.id },
+        billingCycle: { id: subscription.billingCycle.id },
+        isActive: true, // Asumimos que queremos el precio actual activo
+        // Si hay multiples monedas, deberíamos saber cual. Por defecto CLP o la del usuario.
+        // Pero aquí no tenemos el contexto de checkoutDTO.
+        // Vamos a intentar obtener el precio en la moneda preferida del usuario o CLP por defecto.
+        currency: subscription.user.preferredCurrency || 'CLP',
+      },
+    });
+
+    if (!price) {
+      throw new NotFoundException('No se encontró un precio activo actual para esta suscripción');
+    }
+
+    return {
+      type: 'subscription',
+      id: subscription.id,
+      amount: Number(price.amount),
+      currency: price.currency,
+      status: subscription.status, // ACTIVE, PAYMENT_FAILED, etc.
+      planName: subscription.plan.name,
+      billingCycle: subscription.billingCycle.name,
+      userEmail: subscription.user.email,
+      userName: subscription.user.name,
+      createdAt: subscription.createdAt,
+      subscriptionId: subscription.id,
     };
   }
 
@@ -955,13 +1023,13 @@ export class SubscriptionsService {
           email: user.email,
           subscription: subscription
             ? {
-                id: subscription.id,
-                planName: subscription.plan.name,
-                status: subscription.status,
-                startedAt: subscription.startedAt,
-                currentPeriodStart: subscription.currentPeriodStart,
-                currentPeriodEnd: subscription.currentPeriodEnd,
-              }
+              id: subscription.id,
+              planName: subscription.plan.name,
+              status: subscription.status,
+              startedAt: subscription.startedAt,
+              currentPeriodStart: subscription.currentPeriodStart,
+              currentPeriodEnd: subscription.currentPeriodEnd,
+            }
             : null,
           progress,
           totalPaid,
@@ -992,6 +1060,7 @@ export class SubscriptionsService {
     planId: string,
     billingCycleId: string,
     currency?: string,
+    subscriptionId?: string,
   ): Promise<{ token: string; url: string; subscriptionId: string }> {
     // Validar que el plan existe y está activo
     const plan = await this.subscriptionPlanRepository.findOne({
@@ -1028,40 +1097,70 @@ export class SubscriptionsService {
       );
     }
 
-    // Verificar si el usuario ya tiene una suscripción activa
-    const existingSubscription = await this.userSubscriptionRepository.findOne({
-      where: {
-        user: { id: user.id },
-        status: SubscriptionStatus.ACTIVE,
-      },
-    });
+    // Verificar si el usuario ya tiene una suscripción activa (solo si es una nueva suscripción)
+    if (!subscriptionId) {
+      const existingSubscription = await this.userSubscriptionRepository.findOne({
+        where: {
+          user: { id: user.id },
+          status: SubscriptionStatus.ACTIVE,
+        },
+      });
 
-    if (existingSubscription) {
-      throw new BadRequestException('Ya tienes una suscripción activa');
+      if (existingSubscription) {
+        throw new BadRequestException('Ya tienes una suscripción activa');
+      }
     }
 
-    // Calcular fechas del período
-    const now = new Date();
-    const periodStart = new Date(now);
-    const periodEnd = this.calculatePeriodEnd(now, billingCycle.intervalType, billingCycle.intervalCount);
+    let savedSubscription: UserSubscription;
 
-    // Crear la suscripción en nuestra base de datos (con estado PAYMENT_FAILED hasta confirmar el pago)
-    const userSubscription = this.userSubscriptionRepository.create({
-      user,
-      plan,
-      billingCycle,
-      status: SubscriptionStatus.PAYMENT_FAILED,
-      startedAt: now,
-      currentPeriodStart: periodStart,
-      currentPeriodEnd: periodEnd,
-      autoRenew: false, // WebPay no es recurrente, es un pago único
-      metadata: {
+    if (subscriptionId) {
+      // Usar suscripción existente
+      const existing = await this.userSubscriptionRepository.findOne({
+        where: { id: subscriptionId },
+        relations: ['user']
+      });
+
+      if (!existing) {
+        throw new NotFoundException('Suscripción no encontrada');
+      }
+
+      if (existing.user.id !== user.id) {
+        throw new BadRequestException('La suscripción no pertenece al usuario');
+      }
+
+      // Actualizar metadata
+      existing.metadata = {
+        ...existing.metadata,
         paymentProvider: 'webpay',
         currency: finalCurrency,
-      },
-    });
+        lastPaymentAttempt: new Date().toISOString()
+      };
 
-    const savedSubscription = await this.userSubscriptionRepository.save(userSubscription);
+      savedSubscription = await this.userSubscriptionRepository.save(existing);
+    } else {
+      // Calcular fechas del período
+      const now = new Date();
+      const periodStart = new Date(now);
+      const periodEnd = this.calculatePeriodEnd(now, billingCycle.intervalType, billingCycle.intervalCount);
+
+      // Crear la suscripción en nuestra base de datos (con estado PAYMENT_FAILED hasta confirmar el pago)
+      const userSubscription = this.userSubscriptionRepository.create({
+        user,
+        plan,
+        billingCycle,
+        status: SubscriptionStatus.PAYMENT_FAILED,
+        startedAt: now,
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: periodEnd,
+        autoRenew: false, // WebPay no es recurrente, es un pago único
+        metadata: {
+          paymentProvider: 'webpay',
+          currency: finalCurrency,
+        },
+      });
+
+      savedSubscription = await this.userSubscriptionRepository.save(userSubscription);
+    }
 
     // Crear la transacción en WebPay
     const buyOrder = `SUB-${savedSubscription.id.substring(0, 8).toUpperCase()}-${Date.now()}`;
@@ -1227,7 +1326,7 @@ export class SubscriptionsService {
       // Generar boleta electrónica y enviar email de bienvenida con adjunto
       try {
         const boletaPDF = await this.generarBoletaParaPago(subscription, payment);
-        
+
         const attachments = boletaPDF ? [{
           filename: `boleta-${payment.transactionId || payment.id}.pdf`,
           content: boletaPDF,
@@ -1269,6 +1368,7 @@ export class SubscriptionsService {
     planId: string,
     billingCycleId: string,
     currency?: string,
+    subscriptionId?: string,
   ): Promise<{ orderId: string; approveUrl: string; subscriptionId: string }> {
     // Validar que el plan existe y está activo
     const plan = await this.subscriptionPlanRepository.findOne({
@@ -1306,39 +1406,69 @@ export class SubscriptionsService {
     }
 
     // Verificar si el usuario ya tiene una suscripción activa
-    const existingSubscription = await this.userSubscriptionRepository.findOne({
-      where: {
-        user: { id: user.id },
-        status: SubscriptionStatus.ACTIVE,
-      },
-    });
+    if (!subscriptionId) {
+      const existingSubscription = await this.userSubscriptionRepository.findOne({
+        where: {
+          user: { id: user.id },
+          status: SubscriptionStatus.ACTIVE,
+        },
+      });
 
-    if (existingSubscription) {
-      throw new BadRequestException('Ya tienes una suscripción activa');
+      if (existingSubscription) {
+        throw new BadRequestException('Ya tienes una suscripción activa');
+      }
     }
 
-    // Calcular fechas del período
-    const now = new Date();
-    const periodStart = new Date(now);
-    const periodEnd = this.calculatePeriodEnd(now, billingCycle.intervalType, billingCycle.intervalCount);
+    let savedSubscription: UserSubscription;
 
-    // Crear la suscripción en nuestra base de datos (con estado PAYMENT_FAILED hasta confirmar el pago)
-    const userSubscription = this.userSubscriptionRepository.create({
-      user,
-      plan,
-      billingCycle,
-      status: SubscriptionStatus.PAYMENT_FAILED,
-      startedAt: now,
-      currentPeriodStart: periodStart,
-      currentPeriodEnd: periodEnd,
-      autoRenew: false, // PayPal no es recurrente por defecto
-      metadata: {
+    if (subscriptionId) {
+      // Usar suscripción existente
+      const existing = await this.userSubscriptionRepository.findOne({
+        where: { id: subscriptionId },
+        relations: ['user']
+      });
+
+      if (!existing) {
+        throw new NotFoundException('Suscripción no encontrada');
+      }
+
+      if (existing.user.id !== user.id) {
+        throw new BadRequestException('La suscripción no pertenece al usuario');
+      }
+
+      // Actualizar metadata
+      existing.metadata = {
+        ...existing.metadata,
         paymentProvider: 'paypal',
-        currency: 'USD', // PayPal siempre usa USD
-      },
-    });
+        currency: 'USD',
+        lastPaymentAttempt: new Date().toISOString()
+      };
 
-    const savedSubscription = await this.userSubscriptionRepository.save(userSubscription);
+      savedSubscription = await this.userSubscriptionRepository.save(existing);
+    } else {
+      // Calcular fechas del período
+      const now = new Date();
+      const periodStart = new Date(now);
+      const periodEnd = this.calculatePeriodEnd(now, billingCycle.intervalType, billingCycle.intervalCount);
+
+      // Crear la suscripción en nuestra base de datos (con estado PAYMENT_FAILED hasta confirmar el pago)
+      const userSubscription = this.userSubscriptionRepository.create({
+        user,
+        plan,
+        billingCycle,
+        status: SubscriptionStatus.PAYMENT_FAILED,
+        startedAt: now,
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: periodEnd,
+        autoRenew: false, // PayPal no es recurrente por defecto
+        metadata: {
+          paymentProvider: 'paypal',
+          currency: 'USD', // PayPal siempre usa USD
+        },
+      });
+
+      savedSubscription = await this.userSubscriptionRepository.save(userSubscription);
+    }
 
     // Crear la orden en PayPal
     const appUrl = process.env.APP_URL || 'https://carvajalfit.fydeli.com';
@@ -1348,7 +1478,7 @@ export class SubscriptionsService {
     // El precio ya está en USD, usarlo directamente
     const paypalAmount = parseFloat(price.amount.toString());
     const paypalCurrency = 'USD';
-    
+
     console.log(`💰 Creando orden PayPal: ${paypalAmount} ${paypalCurrency}`);
 
     const paypalOrder = await this.paypalService.createOrder({
@@ -1405,7 +1535,7 @@ export class SubscriptionsService {
 
       const payments = purchaseUnit.payments;
       const capture = payments?.captures?.[0];
-      
+
       if (!capture) {
         throw new BadRequestException('No se encontró información de captura en la respuesta de PayPal');
       }
@@ -1455,14 +1585,14 @@ export class SubscriptionsService {
       const expectedAmount = subscription.metadata?.amount;
       const receivedAmount = parseFloat(capture.amount?.value || '0');
       const receivedCurrency = capture.amount?.currency_code || 'USD';
-      
+
       // Comparar montos en USD
       if (expectedAmount && receivedAmount && Math.abs(receivedAmount - expectedAmount) > 0.01) {
         throw new BadRequestException(
           `El monto de la transacción no coincide. Esperado: ${expectedAmount} USD, Recibido: ${receivedAmount} ${receivedCurrency}`
         );
       }
-      
+
       console.log(`✅ Monto validado: ${receivedAmount} ${receivedCurrency} (esperado: ${expectedAmount} USD)`);
 
       // Verificar que no haya sido procesada antes
@@ -1526,7 +1656,7 @@ export class SubscriptionsService {
       // Generar boleta electrónica y enviar email de bienvenida con adjunto
       try {
         const boletaPDF = await this.generarBoletaParaPago(subscription, payment);
-        
+
         const attachments = boletaPDF ? [{
           filename: `boleta-${payment.transactionId || payment.id}.pdf`,
           content: boletaPDF,
@@ -1567,7 +1697,7 @@ export class SubscriptionsService {
   }> {
     try {
       const captureDetails = await this.paypalService.getCaptureDetails(captureId);
-      
+
       return {
         status: captureDetails.status,
         capture: captureDetails,
@@ -1588,6 +1718,7 @@ export class SubscriptionsService {
     planId: string,
     billingCycleId: string,
     currency?: string,
+    subscriptionId?: string,
   ): Promise<{ preferenceId: string; initPoint: string; subscriptionId: string }> {
     // Validar que el plan existe y está activo
     const plan = await this.subscriptionPlanRepository.findOne({
@@ -1625,39 +1756,69 @@ export class SubscriptionsService {
     }
 
     // Verificar si el usuario ya tiene una suscripción activa
-    const existingSubscription = await this.userSubscriptionRepository.findOne({
-      where: {
-        user: { id: user.id },
-        status: SubscriptionStatus.ACTIVE,
-      },
-    });
+    if (!subscriptionId) {
+      const existingSubscription = await this.userSubscriptionRepository.findOne({
+        where: {
+          user: { id: user.id },
+          status: SubscriptionStatus.ACTIVE,
+        },
+      });
 
-    if (existingSubscription) {
-      throw new BadRequestException('Ya tienes una suscripción activa');
+      if (existingSubscription) {
+        throw new BadRequestException('Ya tienes una suscripción activa');
+      }
     }
 
-    // Calcular fechas del período
-    const now = new Date();
-    const periodStart = new Date(now);
-    const periodEnd = this.calculatePeriodEnd(now, billingCycle.intervalType, billingCycle.intervalCount);
+    let savedSubscription: UserSubscription;
 
-    // Crear la suscripción en nuestra base de datos (con estado PAYMENT_FAILED hasta confirmar el pago)
-    const userSubscription = this.userSubscriptionRepository.create({
-      user,
-      plan,
-      billingCycle,
-      status: SubscriptionStatus.PAYMENT_FAILED,
-      startedAt: now,
-      currentPeriodStart: periodStart,
-      currentPeriodEnd: periodEnd,
-      autoRenew: false, // Checkout Pro es pago único
-      metadata: {
+    if (subscriptionId) {
+      // Usar suscripción existente
+      const existing = await this.userSubscriptionRepository.findOne({
+        where: { id: subscriptionId },
+        relations: ['user']
+      });
+
+      if (!existing) {
+        throw new NotFoundException('Suscripción no encontrada');
+      }
+
+      if (existing.user.id !== user.id) {
+        throw new BadRequestException('La suscripción no pertenece al usuario');
+      }
+
+      // Actualizar metadata
+      existing.metadata = {
+        ...existing.metadata,
         paymentProvider: 'mercadopago_checkout',
         currency: finalCurrency,
-      },
-    });
+        lastPaymentAttempt: new Date().toISOString()
+      };
 
-    const savedSubscription = await this.userSubscriptionRepository.save(userSubscription);
+      savedSubscription = await this.userSubscriptionRepository.save(existing);
+    } else {
+      // Calcular fechas del período
+      const now = new Date();
+      const periodStart = new Date(now);
+      const periodEnd = this.calculatePeriodEnd(now, billingCycle.intervalType, billingCycle.intervalCount);
+
+      // Crear la suscripción en nuestra base de datos (con estado PAYMENT_FAILED hasta confirmar el pago)
+      const userSubscription = this.userSubscriptionRepository.create({
+        user,
+        plan,
+        billingCycle,
+        status: SubscriptionStatus.PAYMENT_FAILED,
+        startedAt: now,
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: periodEnd,
+        autoRenew: false, // Checkout Pro es pago único
+        metadata: {
+          paymentProvider: 'mercadopago_checkout',
+          currency: finalCurrency,
+        },
+      });
+
+      savedSubscription = await this.userSubscriptionRepository.save(userSubscription);
+    }
 
     // Crear la preferencia de pago en Mercado Pago
     const appUrl = process.env.APP_URL || 'https://carvajalfit.fydeli.com';
@@ -1809,7 +1970,7 @@ export class SubscriptionsService {
       // Generar boleta electrónica y enviar email de bienvenida con adjunto
       try {
         const boletaPDF = await this.generarBoletaParaPago(subscription, payment);
-        
+
         const attachments = boletaPDF ? [{
           filename: `boleta-${payment.transactionId || payment.id}.pdf`,
           content: boletaPDF,
@@ -1839,5 +2000,162 @@ export class SubscriptionsService {
       );
     }
   }
-}
 
+  /**
+   * Migración de suscriptores
+   */
+  async migrateSubscribers(
+    data: any[],
+  ): Promise<{ processed: number; success: number; failed: number; errors: any[] }> {
+    let processed = 0;
+    let success = 0;
+    let failed = 0;
+    const errors: any[] = [];
+
+    // Validar que data sea un array
+    if (!Array.isArray(data)) {
+      throw new BadRequestException('El formato de datos debe ser una lista de suscriptores');
+    }
+
+    // Obtener plan por defecto (mensual) si no se especifica
+    const defaultPlan = await this.subscriptionPlanRepository.findOne({
+      where: { isActive: true },
+      order: { sortOrder: 'ASC' },
+    });
+
+    if (!defaultPlan) {
+      throw new Error('No hay planes activos para asignar a los usuarios migrados');
+    }
+
+    const defaultBillingCycle = await this.billingCycleRepository.findOne({
+      where: { slug: 'monthly' }
+    });
+
+    if (!defaultBillingCycle) {
+      throw new Error('No se encontró el ciclo de facturación mensual por defecto');
+    }
+
+    for (const item of data) {
+      processed++;
+      try {
+        const { email, name, status, startDate, lastActivationDate, planName } = item;
+
+        if (!email) {
+          throw new Error('Email es requerido');
+        }
+
+        // 1. Buscar o crear usuario
+        let user = await this.userRepository.findOne({ where: { email } });
+        let isNewUser = false;
+
+        if (!user) {
+          isNewUser = true;
+          // Crear usuario con password temporal (aunque no se usará porque se pedirá reset)
+          // Generamos un hash aleatorio para seguridad
+          const randomPass = Math.random().toString(36).slice(-8);
+          // Usamos un hash dummy, el usuario DEBE restablecerlo
+          user = this.userRepository.create({
+            email,
+            name: name || undefined,
+            role: UserRole.CUSTOMER,
+            passwordHash: '$2b$10$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXe',
+            status: UserStatus.ACTIVE,
+          });
+
+          user = await this.userRepository.save(user);
+        }
+
+        // 2. Crear/Actualizar Suscripción
+        let subscription = await this.userSubscriptionRepository.findOne({
+          where: { user: { id: user.id } },
+          order: { createdAt: 'DESC' }
+        });
+
+        if (!subscription) {
+          // Determinar plan (por nombre o default)
+          let plan = defaultPlan;
+          if (planName) {
+            const foundPlan = await this.subscriptionPlanRepository.findOne({
+              where: { name: planName }
+            });
+            if (foundPlan) plan = foundPlan;
+          }
+
+          // Crear suscripción
+          const start = startDate ? new Date(startDate) : new Date();
+          let currentPeriodStart = lastActivationDate ? new Date(lastActivationDate) : new Date();
+
+          // Si la fecha de última activación es inválida o muy antigua, usar start
+          if (isNaN(currentPeriodStart.getTime())) currentPeriodStart = start;
+
+          // Calcular fin del periodo
+          const billingCycleToUse = defaultBillingCycle;
+          const intervalType = billingCycleToUse?.intervalType || 'month';
+          const intervalCount = billingCycleToUse?.intervalCount || 1;
+
+          const currentPeriodEnd = this.calculatePeriodEnd(currentPeriodStart, intervalType, intervalCount);
+
+          // Map status
+          let subStatus = SubscriptionStatus.ACTIVE;
+          if (status === 'cancelled') subStatus = SubscriptionStatus.CANCELLED;
+          if (status === 'paused') subStatus = SubscriptionStatus.PAUSED;
+
+          subscription = this.userSubscriptionRepository.create({
+            user,
+            plan,
+            billingCycle: billingCycleToUse,
+            status: subStatus,
+            startedAt: start,
+            currentPeriodStart,
+            currentPeriodEnd,
+            autoRenew: subStatus === SubscriptionStatus.ACTIVE,
+            metadata: {
+              migrated: true,
+              migrationDate: new Date().toISOString(),
+              originalStatus: status,
+            }
+          });
+
+          await this.userSubscriptionRepository.save(subscription);
+        }
+
+        // 3. Si el usuario es nuevo o se está migrando activo, enviar email de bienvenida/reset
+        if (status === 'active' || status === 'paused') {
+          // Invalidar códigos anteriores
+          await this.passwordResetCodeRepository.update(
+            { user: { id: user.id }, isUsed: false },
+            { isUsed: true }
+          );
+
+          // Generar nuevo código
+          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+          let code = '';
+          for (let i = 0; i < 6; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
+          }
+
+          const expiresAt = new Date();
+          expiresAt.setHours(expiresAt.getHours() + 48); // 48 horas de validez para migración
+
+          const resetCode = this.passwordResetCodeRepository.create({
+            user,
+            code,
+            expiresAt,
+            isUsed: false,
+          });
+          await this.passwordResetCodeRepository.save(resetCode);
+
+          // Enviar email
+          await this.marketingService.sendMigrationEmail(user.email, user.name || '', code);
+        }
+
+        success++;
+      } catch (err: any) {
+        failed++;
+        errors.push({ email: item.email, error: err.message });
+      }
+    }
+
+    return { processed, success, failed, errors };
+  }
+}

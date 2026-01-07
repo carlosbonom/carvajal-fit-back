@@ -9,19 +9,20 @@ export class MarketController {
     constructor(private readonly marketService: MarketService) { }
 
     @Post(':creatorSlug/webpay/create')
-    @UseGuards(JwtAuthGuard)
     async createWebpayTransaction(
-        @CurrentUser() user: User,
+        @CurrentUser() user: User | undefined,
         @Param('creatorSlug') creatorSlug: string,
-        @Body() body: { items: { productId: string; quantity: number }[] }
+        @Body() body: {
+            items: { productId: string; quantity: number }[],
+            guestDetails?: { name: string; email: string }
+        }
     ) {
-        return this.marketService.createWebpayTransaction(user, body.items, creatorSlug);
+        return this.marketService.createWebpayTransaction(user, body.items, creatorSlug, body.guestDetails);
     }
 
     @Post(':creatorSlug/mercadopago/create')
-    @UseGuards(JwtAuthGuard)
     async createMercadoPagoCheckout(
-        @CurrentUser() user: User,
+        @CurrentUser() user: User | undefined,
         @Param('creatorSlug') creatorSlug: string,
         @Body() body: { items: { productId: string; quantity: number }[] }
     ) {
@@ -29,9 +30,8 @@ export class MarketController {
     }
 
     @Post(':creatorSlug/paypal/create')
-    @UseGuards(JwtAuthGuard)
     async createPayPalOrder(
-        @CurrentUser() user: User,
+        @CurrentUser() user: User | undefined,
         @Param('creatorSlug') creatorSlug: string,
         @Body() body: { items: { productId: string; quantity: number }[] }
     ) {

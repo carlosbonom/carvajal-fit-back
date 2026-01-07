@@ -15,6 +15,7 @@ import { SubscriptionPayment } from '../database/entities/subscription-payments.
 import { User } from '../database/entities/users.entity';
 import { UserContentProgress } from '../database/entities/user-content-progress.entity';
 import { Content } from '../database/entities/content.entity';
+import { PasswordResetCode } from '../database/entities/password-reset-code.entity';
 import { SubscriptionsReminderService } from './subscriptions-reminder.service';
 
 @Module({
@@ -27,7 +28,9 @@ import { SubscriptionsReminderService } from './subscriptions-reminder.service';
       SubscriptionPayment,
       User,
       UserContentProgress,
+      UserContentProgress,
       Content,
+      PasswordResetCode,
     ]),
     MarketingModule,
     LiorenModule,

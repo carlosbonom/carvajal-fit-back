@@ -12,6 +12,10 @@ export class CreatePayPalOrderDto {
   @IsString()
   @IsOptional()
   currency?: string;
+
+  @IsUUID()
+  @IsOptional()
+  subscriptionId?: string;
 }
 
 export class ValidatePayPalPaymentDto {

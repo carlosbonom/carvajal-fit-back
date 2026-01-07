@@ -151,7 +151,7 @@ export class FileService {
 
     // Polling for download to be available
     let downloadUrl = '';
-    const maxRetries = 60; // Wait up to 10 minutes for large files
+    const maxRetries = 180; // Wait up to 30 minutes for very large files (180 * 10s = 30min)
     for (let i = 0; i < maxRetries; i++) {
       const response = await axios.get(url, {
         headers: {
@@ -169,7 +169,7 @@ export class FileService {
           console.log(`Download generating: ${response.data.result.default.percentComplete}%`);
         }
       }
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 10000)); // Check every 10 seconds
     }
 
     if (!downloadUrl) {

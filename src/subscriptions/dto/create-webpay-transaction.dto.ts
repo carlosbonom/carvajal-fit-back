@@ -12,6 +12,10 @@ export class CreateWebpayTransactionDto {
   @IsString()
   @IsOptional()
   currency?: string;
+
+  @IsUUID()
+  @IsOptional()
+  subscriptionId?: string;
 }
 
 export class ValidateWebpayPaymentDto {

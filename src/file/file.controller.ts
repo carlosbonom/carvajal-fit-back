@@ -8,7 +8,7 @@ import { CustomFileTypeValidator } from "./validators/file-type.validator";
 
 @Controller('file')
 export class FileController {
-    constructor(private readonly fileService: FileService) {}
+    constructor(private readonly fileService: FileService) { }
 
     @Post('upload')
     @UseInterceptors(
@@ -26,18 +26,14 @@ export class FileController {
                     cb(null, `${uniqueSuffix}-${file.originalname}`);
                 },
             }),
-            limits: {
-                fileSize: 2 * 1024 * 1024 * 1024, // 2GB
-            },
         })
     )
     async uploadFile(
         @UploadedFile(
             new ParseFilePipe({
                 validators: [
-                    new MaxFileSizeValidator({ maxSize: 2 * 1024 * 1024 * 1024 }), // 2GB
-                    new CustomFileTypeValidator({ 
-                        fileType: /^(video|image|application|audio|text)\// 
+                    new CustomFileTypeValidator({
+                        fileType: /^(video|image|application|audio|text)\//
                     }),
                 ],
             }),
@@ -45,11 +41,11 @@ export class FileController {
         file: Express.Multer.File,
         @Body('folder') folder?: string,
         @Body('isPublic') isPublic?: boolean,
-    ){
+    ) {
         try {
             const url = await this.fileService.uploadFile(
-                file, 
-                folder, 
+                file,
+                folder,
                 isPublic ?? true,
             );
             return { url };
