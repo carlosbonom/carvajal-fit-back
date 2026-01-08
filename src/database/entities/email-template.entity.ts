@@ -20,6 +20,12 @@ export class EmailTemplate {
   @Column({ type: 'text', nullable: false, name: 'html_content' })
   htmlContent: string;
 
+  @Column({ type: 'jsonb', nullable: true })
+  design: any;
+
+  @Column({ type: 'boolean', default: false, name: 'is_locked' })
+  isLocked: boolean;
+
   @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
   createdAt: Date;
 

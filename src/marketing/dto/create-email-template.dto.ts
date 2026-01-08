@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, MinLength } from 'class-validator';
+import { IsString, IsNotEmpty, MinLength, IsObject, IsOptional } from 'class-validator';
 
 export class CreateEmailTemplateDto {
   @IsString()
@@ -14,6 +14,13 @@ export class CreateEmailTemplateDto {
   @IsString()
   @IsNotEmpty()
   htmlContent: string;
+
+  @IsObject()
+  @IsOptional()
+  design?: any;
+
+  @IsOptional()
+  isLocked?: boolean;
 }
 
 

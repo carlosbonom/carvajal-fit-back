@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -9,7 +9,7 @@ import { UpdateEmailTemplateDto } from './dto/update-email-template.dto';
 import { SendEmailDto, EmailRecipientDto } from './dto/send-email.dto';
 
 @Injectable()
-export class MarketingService {
+export class MarketingService implements OnModuleInit {
   private resend: Resend;
 
   constructor(
@@ -22,6 +22,128 @@ export class MarketingService {
       console.warn('RESEND_API_KEY no está configurado. El envío de emails no funcionará.');
     } else {
       this.resend = new Resend(apiKey);
+    }
+  }
+
+  async onModuleInit() {
+    await this.seedWelcomeTemplate();
+  }
+
+  private async seedWelcomeTemplate() {
+    try {
+      const welcomeTemplate = await this.emailTemplateRepository.findOne({
+        where: { isLocked: true, name: 'Bienvenida (Protegida)' },
+      });
+
+      if (!welcomeTemplate) {
+        console.log('Sembrando plantilla de bienvenida predeterminada...');
+        const appUrl = this.configService.get<string>('APP_URL') || 'https://carvajalfit.fydeli.com';
+
+        const defaultHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>¡Bienvenido al Club Carvajal Fit!</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #00b2de 0%, #00a0c8 100%); padding: 40px 20px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 32px; font-weight: bold;">
+                ¡Bienvenido al Club! 🎉
+              </h1>
+            </td>
+          </tr>
+          
+          <!-- Content -->
+          <tr>
+            <td style="padding: 40px 30px;">
+              <h2 style="color: #333333; margin: 0 0 20px 0; font-size: 24px;">
+                Hola {{nombre}},
+              </h2>
+              
+              <p style="color: #666666; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                ¡Estamos emocionados de darte la bienvenida al <strong>Club Carvajal Fit</strong>!
+              </p>
+              
+              <p style="color: #666666; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                Tu suscripción al plan <strong>{{plan}}</strong> ha sido activada exitosamente. 
+                Ahora tienes acceso completo a todo el contenido exclusivo del club.
+              </p>
+              
+              <div style="background-color: #f8f9fa; border-left: 4px solid #00b2de; padding: 20px; margin: 30px 0; border-radius: 4px;">
+                <p style="color: #333333; font-size: 16px; line-height: 1.6; margin: 0; font-weight: bold;">
+                  ¿Qué puedes hacer ahora?
+                </p>
+                <ul style="color: #666666; font-size: 15px; line-height: 1.8; margin: 15px 0 0 0; padding-left: 20px;">
+                  <li>Acceder a todos los planes de entrenamiento exclusivos</li>
+                  <li>Ver videos de ejercicios y rutinas personalizadas</li>
+                  <li>Descargar guías nutricionales y recetas</li>
+                  <li>Unirte a la comunidad de WhatsApp</li>
+                </ul>
+              </div>
+              
+              <!-- CTA Button -->
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding: 30px 0;">
+                    <a href="{{app_url}}/club" style="display: inline-block; background-color: #00b2de; color: #ffffff; text-decoration: none; padding: 15px 40px; border-radius: 6px; font-size: 16px; font-weight: bold; transition: background-color 0.3s;">
+                      Entrar al Club
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              
+              <p style="color: #999999; font-size: 14px; line-height: 1.6; margin: 30px 0 0 0;">
+                Si tienes alguna pregunta o necesitas ayuda, no dudes en contactarnos.
+              </p>
+              
+              <p style="color: #999999; font-size: 14px; line-height: 1.6; margin: 10px 0 0 0;">
+                ¡A por tus objetivos! 💪
+              </p>
+              
+              <p style="color: #999999; font-size: 14px; line-height: 1.6; margin: 20px 0 0 0;">
+                El equipo de <strong>Club Carvajal Fit</strong>
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #1a1a1a; padding: 30px; text-align: center;">
+              <p style="color: #999999; font-size: 12px; margin: 0 0 10px 0;">
+                © {{año}} Club Carvajal Fit. Todos los derechos reservados.
+              </p>
+              <p style="color: #666666; font-size: 12px; margin: 0;">
+                Este es un email automático, por favor no respondas a este mensaje.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+        `;
+
+        await this.emailTemplateRepository.save({
+          name: 'Bienvenida (Protegida)',
+          subject: '¡Bienvenido al Club Carvajal Fit! 🎉',
+          htmlContent: defaultHtml,
+          isLocked: true,
+          design: null, // Se puede editar luego en Unlayer
+        });
+        console.log('Plantilla de bienvenida sembrada exitosamente');
+      }
+    } catch (error) {
+      console.error('Error al sembrar plantilla de bienvenida:', error);
     }
   }
 
@@ -57,6 +179,9 @@ export class MarketingService {
 
   async remove(id: string): Promise<void> {
     const template = await this.findOne(id);
+    if (template.isLocked) {
+      throw new BadRequestException('Esta plantilla está protegida y no puede ser eliminada');
+    }
     await this.emailTemplateRepository.remove(template);
   }
 
@@ -156,127 +281,66 @@ export class MarketingService {
     }
 
     try {
+      // Buscar la plantilla de bienvenida protegida
+      const template = await this.emailTemplateRepository.findOne({
+        where: { isLocked: true, name: 'Bienvenida (Protegida)' },
+      });
+
       const fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL') || 'noreply@carvajalfit.com';
       const fromName = this.configService.get<string>('RESEND_FROM_NAME') || 'Club Carvajal Fit';
       const appUrl = this.configService.get<string>('APP_URL') || 'https://carvajalfit.fydeli.com';
 
-      const htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>¡Bienvenido al Club Carvajal Fit!</title>
-</head>
-<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-          <!-- Header -->
-          <tr>
-            <td style="background: linear-gradient(135deg, #00b2de 0%, #00a0c8 100%); padding: 40px 20px; text-align: center;">
-              <h1 style="color: #ffffff; margin: 0; font-size: 32px; font-weight: bold;">
-                ¡Bienvenido al Club! 🎉
-              </h1>
-            </td>
-          </tr>
-          
-          <!-- Content -->
-          <tr>
-            <td style="padding: 40px 30px;">
-              <h2 style="color: #333333; margin: 0 0 20px 0; font-size: 24px;">
-                Hola ${userName || 'Miembro'},
-              </h2>
-              
-              <p style="color: #666666; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-                ¡Estamos emocionados de darte la bienvenida al <strong>Club Carvajal Fit</strong>!
-              </p>
-              
-              <p style="color: #666666; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-                Tu suscripción al plan <strong>${planName}</strong> ha sido activada exitosamente. 
-                Ahora tienes acceso completo a todo el contenido exclusivo del club.
-              </p>
-              
-              <div style="background-color: #f8f9fa; border-left: 4px solid #00b2de; padding: 20px; margin: 30px 0; border-radius: 4px;">
-                <p style="color: #333333; font-size: 16px; line-height: 1.6; margin: 0; font-weight: bold;">
-                  ¿Qué puedes hacer ahora?
-                </p>
-                <ul style="color: #666666; font-size: 15px; line-height: 1.8; margin: 15px 0 0 0; padding-left: 20px;">
-                  <li>Acceder a todos los planes de entrenamiento exclusivos</li>
-                  <li>Ver videos de ejercicios y rutinas personalizadas</li>
-                  <li>Descargar guías nutricionales y recetas</li>
-                  <li>Unirte a la comunidad de WhatsApp</li>
-                </ul>
-              </div>
-              
-              <!-- CTA Button -->
-              <table width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td align="center" style="padding: 30px 0;">
-                    <a href="${appUrl}/club" style="display: inline-block; background-color: #00b2de; color: #ffffff; text-decoration: none; padding: 15px 40px; border-radius: 6px; font-size: 16px; font-weight: bold; transition: background-color 0.3s;">
-                      Entrar al Club
-                    </a>
-                  </td>
-                </tr>
-              </table>
-              
-              <p style="color: #999999; font-size: 14px; line-height: 1.6; margin: 30px 0 0 0;">
-                Si tienes alguna pregunta o necesitas ayuda, no dudes en contactarnos.
-              </p>
-              
-              <p style="color: #999999; font-size: 14px; line-height: 1.6; margin: 10px 0 0 0;">
-                ¡A por tus objetivos! 💪
-              </p>
-              
-              <p style="color: #999999; font-size: 14px; line-height: 1.6; margin: 20px 0 0 0;">
-                El equipo de <strong>Club Carvajal Fit</strong>
-              </p>
-            </td>
-          </tr>
-          
-          <!-- Footer -->
-          <tr>
-            <td style="background-color: #1a1a1a; padding: 30px; text-align: center;">
-              <p style="color: #999999; font-size: 12px; margin: 0 0 10px 0;">
-                © ${new Date().getFullYear()} Club Carvajal Fit. Todos los derechos reservados.
-              </p>
-              <p style="color: #666666; font-size: 12px; margin: 0;">
-                Este es un email automático, por favor no respondas a este mensaje.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-      `;
+      const variables = {
+        nombre: userName || 'Miembro',
+        plan: planName,
+        app_url: appUrl,
+        año: new Date().getFullYear().toString(),
+      };
+
+      let htmlContent: string;
+      let subject: string;
+
+      if (template) {
+        htmlContent = this.replaceVariables(template.htmlContent, variables);
+        subject = this.replaceVariables(template.subject, variables);
+      } else {
+        // Fallback en caso de que la búsqueda falle por alguna razón
+        console.warn('Usando fallback para el email de bienvenida (plantilla no encontrada)');
+        htmlContent = this.getFallbackWelcomeHtml(variables);
+        subject = '¡Bienvenido al Club Carvajal Fit! 🎉';
+      }
 
       const emailOptions: any = {
         from: `${fromName} <${fromEmail}>`,
         to: userEmail,
-        subject: `¡Bienvenido al Club Carvajal Fit! 🎉`,
+        subject,
         html: htmlContent,
       };
 
-      // Agregar adjuntos si existen
-      // Resend acepta adjuntos como Buffer o base64 string
       if (attachments && attachments.length > 0) {
         emailOptions.attachments = attachments.map(att => ({
           filename: att.filename,
-          content: att.content, // Buffer se puede pasar directamente
+          content: att.content,
         }));
       }
 
       await this.resend.emails.send(emailOptions);
-
       console.log(`Email de bienvenida enviado a ${userEmail}`);
     } catch (error: any) {
       console.error(`Error al enviar email de bienvenida a ${userEmail}:`, error);
-      // No lanzamos error para no interrumpir el flujo de activación de suscripción
     }
+  }
+
+  /**
+   * Proporciona un HTML de respaldo para el email de bienvenida
+   */
+  private getFallbackWelcomeHtml(v: any): string {
+    return `
+      <h1>¡Bienvenido al Club! 🎉</h1>
+      <p>Hola ${v.nombre}, estamos felices de verte por aquí.</p>
+      <p>Tu plan <strong>${v.plan}</strong> ya está activo.</p>
+      <p><a href="${v.app_url}/club">Ir al Club</a></p>
+    `;
   }
 
   /**

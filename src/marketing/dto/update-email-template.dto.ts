@@ -1,4 +1,4 @@
-import { IsString, IsOptional, MinLength } from 'class-validator';
+import { IsString, IsOptional, MinLength, IsObject } from 'class-validator';
 
 export class UpdateEmailTemplateDto {
   @IsString()
@@ -14,6 +14,13 @@ export class UpdateEmailTemplateDto {
   @IsString()
   @IsOptional()
   htmlContent?: string;
+
+  @IsObject()
+  @IsOptional()
+  design?: any;
+
+  @IsOptional()
+  isLocked?: boolean;
 }
 
 
