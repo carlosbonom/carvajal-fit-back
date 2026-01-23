@@ -39,7 +39,7 @@ export class FileController {
                 ],
             }),
         )
-        file: Express.Multer.File,
+        file: any,
         @Body('folder') folder?: string,
         @Body('isPublic') isPublic?: boolean,
     ) {
