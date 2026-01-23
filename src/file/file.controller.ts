@@ -5,7 +5,7 @@ import { join } from "path";
 import { existsSync, mkdirSync, unlink } from "fs";
 import { FileService } from "./file.service";
 import { CustomFileTypeValidator } from "./validators/file-type.validator";
-import type { Multer } from 'multer';
+
 
 @Controller('file')
 export class FileController {
@@ -39,7 +39,7 @@ export class FileController {
                 ],
             }),
         )
-        file: Multer.File,
+        file: Express.Multer.File,
         @Body('folder') folder?: string,
         @Body('isPublic') isPublic?: boolean,
     ) {
