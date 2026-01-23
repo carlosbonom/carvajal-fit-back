@@ -26,7 +26,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly subscriptionsService: SubscriptionsService,
-  ) {}
+  ) { }
 
   @Public()
   @Post('register')
@@ -66,10 +66,10 @@ export class AuthController {
   async getProfile(@CurrentUser() user: User) {
     // Retornar datos del usuario sin información sensible
     const { passwordHash, refreshTokenHash, ...userProfile } = user;
-    
+
     // Obtener suscripción del usuario (si existe, sin importar el estado)
     const subscription = await this.subscriptionsService.getUserSubscription(user.id);
-    
+
     return {
       ...userProfile,
       subscription: subscription || null,
@@ -103,6 +103,15 @@ export class AuthController {
     @Body() verifyDto: VerifyPasswordChangeDto,
   ): Promise<{ message: string }> {
     return this.authService.verifyAndChangePassword(user, verifyDto);
+  }
+
+  @Public()
+  @Post('password/reset')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(
+    @Body() verifyDto: VerifyPasswordChangeDto,
+  ): Promise<{ message: string }> {
+    return this.authService.verifyAndChangePasswordByEmail(verifyDto);
   }
 }
 
