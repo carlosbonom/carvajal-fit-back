@@ -2,6 +2,8 @@ import { Injectable, NotFoundException, BadRequestException, OnModuleInit } from
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
+import * as fs from 'fs';
+import * as path from 'path';
 import { Resend } from 'resend';
 import { EmailTemplate } from '../database/entities/email-template.entity';
 import { UserSubscription, SubscriptionStatus } from '../database/entities/user-subscriptions.entity';
@@ -496,10 +498,6 @@ export class MarketingService implements OnModuleInit {
     const loginUrl = 'https://carvajalfit.com/login';
     const fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL') || 'noreply@carvajalfit.com';
     const fromName = this.configService.get<string>('RESEND_FROM_NAME') || 'Club Carvajal Fit';
-
-    // Leer el template HTML desde el archivo
-    const fs = require('fs');
-    const path = require('path');
     const templatePath = path.join(__dirname, 'templates', 'migration-notification.html');
     let htmlTemplate: string;
 
@@ -564,6 +562,33 @@ export class MarketingService implements OnModuleInit {
   }
 
   /**
+   * Obtiene la lista de destinatarios únicos con suscripción activa
+   */
+  async getMigrationNotificationRecipients(): Promise<Array<{ email: string; name: string }>> {
+    const activeSubscriptions = await this.userSubscriptionRepository.find({
+      where: { status: SubscriptionStatus.ACTIVE },
+      relations: ['user'],
+    });
+
+    if (activeSubscriptions.length === 0) {
+      return [];
+    }
+
+    const recipients = activeSubscriptions.map(subscription => ({
+      email: subscription.user.email,
+      name: subscription.user.name || 'Miembro',
+    }));
+
+    return recipients.reduce((acc, current) => {
+      const exists = acc.find(item => item.email === current.email);
+      if (!exists) {
+        acc.push(current);
+      }
+      return acc;
+    }, [] as Array<{ email: string; name: string }>);
+  }
+
+  /**
    * Envía notificaciones de migración a todos los usuarios con suscripción activa
    */
   async sendMigrationNotificationToActiveSubscribers(): Promise<{
@@ -576,34 +601,15 @@ export class MarketingService implements OnModuleInit {
       throw new BadRequestException('RESEND_API_KEY no está configurado');
     }
 
-    // Obtener todos los usuarios con suscripción activa
-    const activeSubscriptions = await this.userSubscriptionRepository.find({
-      where: { status: SubscriptionStatus.ACTIVE },
-      relations: ['user'],
-    });
+    const uniqueRecipients = await this.getMigrationNotificationRecipients();
 
-    if (activeSubscriptions.length === 0) {
+    if (uniqueRecipients.length === 0) {
       return {
         success: 0,
         failed: 0,
         totalActiveSubscribers: 0,
       };
     }
-
-    // Crear array de recipients desde las suscripciones activas
-    const recipients = activeSubscriptions.map(subscription => ({
-      email: subscription.user.email,
-      name: subscription.user.name || 'Miembro',
-    }));
-
-    // Remover duplicados por email (en caso de que un usuario tenga múltiples suscripciones activas)
-    const uniqueRecipients = recipients.reduce((acc, current) => {
-      const exists = acc.find(item => item.email === current.email);
-      if (!exists) {
-        acc.push(current);
-      }
-      return acc;
-    }, [] as Array<{ email: string; name: string }>);
 
     console.log(`Enviando notificaciones de migración a ${uniqueRecipients.length} usuarios con suscripción activa`);
 

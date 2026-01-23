@@ -33,6 +33,26 @@ Authorization: Bearer YOUR_JWT_TOKEN
 }
 ```
 
+#### 🔍 Previsualización de Destinatarios
+
+Antes de enviar, puedes ver quiénes recibirán el correo con este endpoint:
+
+**GET** `/v1/marketing/preview-migration-notification-recipients`
+
+**Response:**
+```json
+[
+  {
+    "email": "usuario1@example.com",
+    "name": "Juan Pérez"
+  },
+  {
+    "email": "usuario2@example.com",
+    "name": "María García"
+  }
+]
+```
+
 #### 🔐 Autenticación
 
 Solo usuarios con rol `admin` pueden usar este endpoint.

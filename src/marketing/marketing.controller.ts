@@ -74,6 +74,17 @@ export class MarketingController {
     return this.marketingService.sendMigrationNotificationBulk(dto.recipients);
   }
 
+  @Get('preview-migration-notification-recipients')
+  async previewMigrationNotificationRecipients(
+    @CurrentUser() user: User,
+  ) {
+    // Solo admins pueden previsualizar
+    if (user.role !== 'admin') {
+      throw new ForbiddenException('No autorizado. Solo administradores pueden previsualizar destinatarios.');
+    }
+    return this.marketingService.getMigrationNotificationRecipients();
+  }
+
   @Post('send-migration-notification-to-active-subscribers')
   @HttpCode(HttpStatus.OK)
   async sendMigrationNotificationToActiveSubscribers(
