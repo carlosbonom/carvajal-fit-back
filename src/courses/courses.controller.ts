@@ -34,7 +34,7 @@ import { User } from '../database/entities/users.entity';
 
 @Controller('courses')
 export class CoursesController {
-  constructor(private readonly coursesService: CoursesService) {}
+  constructor(private readonly coursesService: CoursesService) { }
 
   @Get('subscription')
   @UseGuards(JwtAuthGuard)
@@ -114,13 +114,13 @@ export class CoursesController {
         fileIsRequired: false,
         validators: [
           new MaxFileSizeValidator({ maxSize: 100 * 1024 * 1024 }), // 100MB
-          new FileTypeValidator({ 
-            fileType: /^(video|image|application|audio|text)\// 
+          new FileTypeValidator({
+            fileType: /^(video|image|application|audio|text)\//
           }),
         ],
       }),
     )
-    file?: Express.Multer.File,
+    file?: any,
   ): Promise<ContentResponseDto> {
     return this.coursesService.createContent(courseId, createContentDto, file);
   }
@@ -137,13 +137,13 @@ export class CoursesController {
         fileIsRequired: false,
         validators: [
           new MaxFileSizeValidator({ maxSize: 100 * 1024 * 1024 }), // 100MB
-          new FileTypeValidator({ 
-            fileType: /^(video|image|application|audio|text)\// 
+          new FileTypeValidator({
+            fileType: /^(video|image|application|audio|text)\//
           }),
         ],
       }),
     )
-    file?: Express.Multer.File,
+    file?: any,
   ): Promise<ContentResponseDto> {
     return this.coursesService.updateContent(contentId, updateContentDto, file);
   }
@@ -189,13 +189,13 @@ export class CoursesController {
         fileIsRequired: false,
         validators: [
           new MaxFileSizeValidator({ maxSize: 100 * 1024 * 1024 }), // 100MB
-          new FileTypeValidator({ 
-            fileType: /^(video|image|application|audio|text)\// 
+          new FileTypeValidator({
+            fileType: /^(video|image|application|audio|text)\//
           }),
         ],
       }),
     )
-    file?: Express.Multer.File,
+    file?: any,
   ): Promise<ContentResourceResponseDto> {
     return this.coursesService.createContentResource(contentId, createResourceDto, file);
   }

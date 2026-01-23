@@ -43,7 +43,7 @@ export class CoursesService {
     @InjectRepository(CourseCategory)
     private readonly courseCategoryRepository: Repository<CourseCategory>,
     private readonly fileService: FileService,
-  ) {}
+  ) { }
 
   async getAllCourses(): Promise<CourseResponseDto[]> {
     const courses = await this.courseRepository.find({
@@ -66,17 +66,17 @@ export class CoursesService {
       metadata: course.metadata,
       creator: course.creator
         ? {
-            id: course.creator.id,
-            name: course.creator.name,
-            slug: course.creator.slug,
-          }
+          id: course.creator.id,
+          name: course.creator.name,
+          slug: course.creator.slug,
+        }
         : null,
       category: course.category
         ? {
-            id: course.category.id,
-            name: course.category.name,
-            slug: course.category.slug,
-          }
+          id: course.category.id,
+          name: course.category.name,
+          slug: course.category.slug,
+        }
         : null,
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,
@@ -126,17 +126,17 @@ export class CoursesService {
       metadata: course.metadata,
       creator: course.creator
         ? {
-            id: course.creator.id,
-            name: course.creator.name,
-            slug: course.creator.slug,
-          }
+          id: course.creator.id,
+          name: course.creator.name,
+          slug: course.creator.slug,
+        }
         : null,
       category: course.category
         ? {
-            id: course.category.id,
-            name: course.category.name,
-            slug: course.category.slug,
-          }
+          id: course.category.id,
+          name: course.category.name,
+          slug: course.category.slug,
+        }
         : null,
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,
@@ -273,17 +273,17 @@ export class CoursesService {
       metadata: courseWithRelations!.metadata,
       creator: courseWithRelations!.creator
         ? {
-            id: courseWithRelations!.creator.id,
-            name: courseWithRelations!.creator.name,
-            slug: courseWithRelations!.creator.slug,
-          }
+          id: courseWithRelations!.creator.id,
+          name: courseWithRelations!.creator.name,
+          slug: courseWithRelations!.creator.slug,
+        }
         : null,
       category: courseWithRelations!.category
         ? {
-            id: courseWithRelations!.category.id,
-            name: courseWithRelations!.category.name,
-            slug: courseWithRelations!.category.slug,
-          }
+          id: courseWithRelations!.category.id,
+          name: courseWithRelations!.category.name,
+          slug: courseWithRelations!.category.slug,
+        }
         : null,
       createdAt: courseWithRelations!.createdAt,
       updatedAt: courseWithRelations!.updatedAt,
@@ -330,17 +330,17 @@ export class CoursesService {
       metadata: courseWithRelations!.metadata,
       creator: courseWithRelations!.creator
         ? {
-            id: courseWithRelations!.creator.id,
-            name: courseWithRelations!.creator.name,
-            slug: courseWithRelations!.creator.slug,
-          }
+          id: courseWithRelations!.creator.id,
+          name: courseWithRelations!.creator.name,
+          slug: courseWithRelations!.creator.slug,
+        }
         : null,
       category: courseWithRelations!.category
         ? {
-            id: courseWithRelations!.category.id,
-            name: courseWithRelations!.category.name,
-            slug: courseWithRelations!.category.slug,
-          }
+          id: courseWithRelations!.category.id,
+          name: courseWithRelations!.category.name,
+          slug: courseWithRelations!.category.slug,
+        }
         : null,
       createdAt: courseWithRelations!.createdAt,
       updatedAt: courseWithRelations!.updatedAt,
@@ -420,7 +420,7 @@ export class CoursesService {
     if (updateCourseDto.durationMinutes !== undefined) course.durationMinutes = updateCourseDto.durationMinutes ?? null;
     if (updateCourseDto.sortOrder !== undefined) course.sortOrder = updateCourseDto.sortOrder ?? 0;
     if (updateCourseDto.metadata !== undefined) course.metadata = updateCourseDto.metadata;
-    
+
     // Manejar isPublished y publishedAt
     if (updateCourseDto.isPublished !== undefined) {
       course.isPublished = updateCourseDto.isPublished;
@@ -458,17 +458,17 @@ export class CoursesService {
       metadata: courseWithRelations!.metadata,
       creator: courseWithRelations!.creator
         ? {
-            id: courseWithRelations!.creator.id,
-            name: courseWithRelations!.creator.name,
-            slug: courseWithRelations!.creator.slug,
-          }
+          id: courseWithRelations!.creator.id,
+          name: courseWithRelations!.creator.name,
+          slug: courseWithRelations!.creator.slug,
+        }
         : null,
       category: courseWithRelations!.category
         ? {
-            id: courseWithRelations!.category.id,
-            name: courseWithRelations!.category.name,
-            slug: courseWithRelations!.category.slug,
-          }
+          id: courseWithRelations!.category.id,
+          name: courseWithRelations!.category.name,
+          slug: courseWithRelations!.category.slug,
+        }
         : null,
       createdAt: courseWithRelations!.createdAt,
       updatedAt: courseWithRelations!.updatedAt,
@@ -478,7 +478,7 @@ export class CoursesService {
   async createContent(
     courseId: string,
     createContentDto: CreateContentDto,
-    file?: Express.Multer.File,
+    file?: any,
   ): Promise<ContentResponseDto> {
     // Validar que el curso existe
     const course = await this.courseRepository.findOne({
@@ -594,7 +594,7 @@ export class CoursesService {
   async createContentResource(
     contentId: string,
     createResourceDto: CreateContentResourceDto,
-    file?: Express.Multer.File,
+    file?: any,
   ): Promise<ContentResourceResponseDto> {
     // Validar que el contenido existe
     const content = await this.contentRepository.findOne({
@@ -687,7 +687,7 @@ export class CoursesService {
   async updateContent(
     contentId: string,
     updateContentDto: UpdateContentDto,
-    file?: Express.Multer.File,
+    file?: any,
   ): Promise<ContentResponseDto> {
     // Validar que el contenido existe
     const content = await this.contentRepository.findOne({
@@ -901,7 +901,7 @@ export class CoursesService {
   async getSubscriptionCourses(user: User): Promise<CourseWithContentResponseDto[]> {
     // Si el usuario es admin o support, no necesita suscripción activa pero respeta isPublished e isActive
     const isAdmin = user.role === UserRole.ADMIN || user.role === UserRole.SUPPORT;
-    
+
     let monthsSinceStart = 0;
 
     // Solo verificar suscripción si no es admin
@@ -960,17 +960,17 @@ export class CoursesService {
           metadata: course.metadata,
           creator: course.creator
             ? {
-                id: course.creator.id,
-                name: course.creator.name,
-                slug: course.creator.slug,
-              }
+              id: course.creator.id,
+              name: course.creator.name,
+              slug: course.creator.slug,
+            }
             : null,
           category: course.category
             ? {
-                id: course.category.id,
-                name: course.category.name,
-                slug: course.category.slug,
-              }
+              id: course.category.id,
+              name: course.category.name,
+              slug: course.category.slug,
+            }
             : null,
           createdAt: course.createdAt,
           updatedAt: course.updatedAt,
@@ -1049,10 +1049,10 @@ export class CoursesService {
   private calculateMonthsBetween(startDate: Date, endDate: Date): number {
     const start = new Date(startDate);
     const end = new Date(endDate);
-    
+
     const yearsDiff = end.getFullYear() - start.getFullYear();
     const monthsDiff = end.getMonth() - start.getMonth();
-    
+
     return yearsDiff * 12 + monthsDiff;
   }
 
@@ -1081,7 +1081,7 @@ export class CoursesService {
 
     const now = new Date();
     const progressSeconds = Math.min(saveProgressDto.progressSeconds, saveProgressDto.totalSeconds);
-    
+
     // Determinar si está completado (si ha visto al menos el 90% del video)
     const completionThreshold = saveProgressDto.totalSeconds * 0.9;
     const isCompleted = progressSeconds >= completionThreshold;
@@ -1091,7 +1091,7 @@ export class CoursesService {
       progress.progressSeconds = progressSeconds;
       progress.lastWatchedAt = now;
       progress.watchCount += 1;
-      
+
       if (isCompleted && !progress.isCompleted) {
         progress.isCompleted = true;
         progress.completedAt = now;
@@ -1218,7 +1218,7 @@ export class CoursesService {
       .getMany();
 
     const progressMap = new Map<string, { progressSeconds: number; isCompleted: boolean }>();
-    
+
     progressList.forEach((progress) => {
       if (progress.content && progress.content.id) {
         progressMap.set(progress.content.id, {
