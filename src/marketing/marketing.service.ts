@@ -37,7 +37,7 @@ export class MarketingService implements OnModuleInit {
 
       if (!welcomeTemplate) {
         console.log('Sembrando plantilla de bienvenida predeterminada...');
-        const appUrl = this.configService.get<string>('APP_URL') || 'https://carvajalfit.fydeli.com';
+        const appUrl = this.configService.get<string>('APP_URL') || 'https://carvajalfit.com';
 
         const defaultHtml = `
 <!DOCTYPE html>
@@ -288,7 +288,7 @@ export class MarketingService implements OnModuleInit {
 
       const fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL') || 'noreply@carvajalfit.com';
       const fromName = this.configService.get<string>('RESEND_FROM_NAME') || 'Club Carvajal Fit';
-      const appUrl = this.configService.get<string>('APP_URL') || 'https://carvajalfit.fydeli.com';
+      const appUrl = this.configService.get<string>('APP_URL') || 'https://carvajalfit.com';
 
       const variables = {
         nombre: userName || 'Miembro',
@@ -382,7 +382,7 @@ export class MarketingService implements OnModuleInit {
       return;
     }
 
-    const appUrl = this.configService.get<string>('APP_URL') || 'https://carvajalfit.fydeli.com';
+    const appUrl = this.configService.get<string>('APP_URL') || 'https://carvajalfit.com';
     const resetLink = `${appUrl}/recuperar-password?email=${encodeURIComponent(email)}&code=${resetCode}&mode=verify`;
     const fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL') || 'noreply@carvajalfit.com';
     const fromName = this.configService.get<string>('RESEND_FROM_NAME') || 'Club Carvajal Fit';
@@ -487,7 +487,8 @@ export class MarketingService implements OnModuleInit {
     userName: string,
     productName: string,
     productLink: string,
-    orderNumber: string
+    orderNumber: string,
+    attachments?: Array<{ filename: string; content: Buffer; contentType?: string }>,
   ): Promise<void> {
     if (!this.resend) return;
 
@@ -495,7 +496,7 @@ export class MarketingService implements OnModuleInit {
     const fromName = this.configService.get<string>('RESEND_FROM_NAME') || 'Club Carvajal Fit';
 
     try {
-      await this.resend.emails.send({
+      const emailOptions: any = {
         from: `${fromName} <${fromEmail}>`,
         to: email,
         subject: `Tu compra: ${productName} 📥`,
@@ -544,7 +545,16 @@ export class MarketingService implements OnModuleInit {
 </body>
 </html>
         `
-      });
+      };
+
+      if (attachments && attachments.length > 0) {
+        emailOptions.attachments = attachments.map(att => ({
+          filename: att.filename,
+          content: att.content,
+        }));
+      }
+
+      await this.resend.emails.send(emailOptions);
       console.log(`Email de producto digital enviado a ${email}`);
     } catch (error) {
       console.error(`Error enviando email de producto digital a ${email}:`, error);
@@ -559,7 +569,8 @@ export class MarketingService implements OnModuleInit {
     userName: string,
     orderNumber: string,
     items: { name: string; quantity: number; price: number }[],
-    total: number
+    total: number,
+    attachments?: Array<{ filename: string; content: Buffer; contentType?: string }>,
   ): Promise<void> {
     if (!this.resend) return;
 
@@ -574,7 +585,7 @@ export class MarketingService implements OnModuleInit {
     `).join('');
 
     try {
-      await this.resend.emails.send({
+      const emailOptions: any = {
         from: `${fromName} <${fromEmail}>`,
         to: email,
         subject: `Confirmación de compra #${orderNumber} ✅`,
@@ -628,10 +639,191 @@ export class MarketingService implements OnModuleInit {
 </body>
 </html>
         `
-      });
+      };
+
+      if (attachments && attachments.length > 0) {
+        emailOptions.attachments = attachments.map(att => ({
+          filename: att.filename,
+          content: att.content,
+        }));
+      }
+
+      await this.resend.emails.send(emailOptions);
       console.log(`Email de confirmación enviado a ${email}`);
     } catch (error) {
       console.error(`Error enviando confirmación a ${email}:`, error);
+    }
+  }
+
+  /**
+   * Envía notificación de pago de suscripción exitoso
+   */
+  async sendSubscriptionPaymentSuccessEmail(
+    email: string,
+    userName: string,
+    planName: string,
+    amount: number,
+    nextPaymentDate: Date,
+    attachments?: Array<{ filename: string; content: Buffer; contentType?: string }>,
+  ): Promise<void> {
+    if (!this.resend) return;
+
+    const fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL') || 'noreply@carvajalfit.com';
+    const fromName = this.configService.get<string>('RESEND_FROM_NAME') || 'Club Carvajal Fit';
+    const dateFormatted = new Date().toLocaleDateString('es-CL');
+    const nextDateFormatted = nextPaymentDate.toLocaleDateString('es-CL');
+
+    try {
+      const emailOptions: any = {
+        from: `${fromName} <${fromEmail}>`,
+        to: email,
+        subject: `¡Pago Recibido! Tu suscripción sigue activa ✅`,
+        html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Pago Exitoso</title>
+</head>
+<body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding: 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 40px 20px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 28px;">Pago Procesado con Éxito 🎉</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px 30px;">
+              <h2 style="color: #333; margin-top: 0;">Hola ${userName},</h2>
+              <p style="color: #666; font-size: 16px; line-height: 1.6;">
+                Hemos procesado correctamente el pago de tu suscripción <strong>${planName}</strong>.
+                Tu acceso a todo el contenido exclusivo del Club Carvajal Fit sigue activo.
+              </p>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 30px 0; background-color: #f8f9fa; border-radius: 8px;">
+                <tr>
+                  <td style="padding: 20px;">
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="padding-bottom: 10px; color: #666;">Fecha de pago:</td>
+                        <td style="padding-bottom: 10px; text-align: right; color: #333; font-weight: bold;">${dateFormatted}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding-bottom: 10px; color: #666;">Monto:</td>
+                        <td style="padding-bottom: 10px; text-align: right; color: #333; font-weight: bold;">$${amount.toLocaleString('es-CL')}</td>
+                      </tr>
+                      <tr>
+                        <td style="color: #666;">Próximo cobro:</td>
+                        <td style="text-align: right; color: #333; font-weight: bold;">${nextDateFormatted}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="color: #999; font-size: 14px; text-align: center;">
+                Gracias por mantenerte activo con nosotros.<br>
+                ¡A seguir entrenando! 💪
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+        `
+      };
+
+      if (attachments && attachments.length > 0) {
+        emailOptions.attachments = attachments.map(att => ({
+          filename: att.filename,
+          content: att.content,
+        }));
+      }
+
+      await this.resend.emails.send(emailOptions);
+      console.log(`Email de pago exitoso enviado a ${email}`);
+    } catch (error) {
+      console.error(`Error enviando email de pago exitoso a ${email}:`, error);
+    }
+  }
+
+  /**
+   * Envía notificación de fallo de pago de suscripción
+   */
+  async sendSubscriptionPaymentFailedEmail(
+    email: string,
+    userName: string,
+    planName: string,
+    retryLink: string,
+  ): Promise<void> {
+    if (!this.resend) return;
+
+    const fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL') || 'noreply@carvajalfit.com';
+    const fromName = this.configService.get<string>('RESEND_FROM_NAME') || 'Club Carvajal Fit';
+
+    try {
+      await this.resend.emails.send({
+        from: `${fromName} <${fromEmail}>`,
+        to: email,
+        subject: `Problema con tu pago de suscripción ⚠️`,
+        html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Pago Fallido</title>
+</head>
+<body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding: 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%); padding: 40px 20px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 28px;">No pudimos procesar tu pago ⚠️</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px 30px;">
+              <h2 style="color: #333; margin-top: 0;">Hola ${userName},</h2>
+              <p style="color: #666; font-size: 16px; line-height: 1.6;">
+                Tuvimos un problema al intentar procesar la renovación de tu suscripción <strong>${planName}</strong>.
+              </p>
+              
+              <p style="color: #666; font-size: 16px; line-height: 1.6;">
+                Esto puede deberse a fondos insuficientes, tarjeta vencida o un bloqueo temporal del banco.
+                Para evitar la suspensión de tu acceso, por favor actualiza tu método de pago lo antes posible.
+              </p>
+
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${retryLink}" style="background-color: #ef4444; color: #ffffff; text-decoration: none; padding: 15px 30px; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                  Actualizar Método de Pago
+                </a>
+              </div>
+
+              <p style="color: #999; font-size: 14px; text-align: center;">
+                Intentaremos procesar el pago nuevamente en unos días.<br>
+                Si ya actualizaste tus datos, ignora este mensaje.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+        `
+      });
+      console.log(`Email de pago fallido enviado a ${email}`);
+    } catch (error) {
+      console.error(`Error enviando email de pago fallido a ${email}:`, error);
     }
   }
 }

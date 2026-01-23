@@ -20,9 +20,9 @@ Esta guía te ayudará a integrar el sistema de suscripciones con Mercado Pago e
 Crea un archivo `.env` en tu proyecto frontend:
 
 ```env
-VITE_API_URL=https://carvajalfit.fydeli.com
+VITE_API_URL=https://carvajalfit.com
 # o
-REACT_APP_API_URL=https://carvajalfit.fydeli.com
+REACT_APP_API_URL=https://carvajalfit.com
 ```
 
 ### Instalación de Dependencias (si usas fetch nativo, no necesitas nada)
@@ -40,7 +40,7 @@ npm install axios
 
 ### Base URL
 ```
-https://carvajalfit.fydeli.com  # Desarrollo
+https://carvajalfit.com  # Desarrollo
 https://tu-dominio.com # Producción
 ```
 
@@ -91,7 +91,7 @@ https://tu-dominio.com # Producción
 
 ```typescript
 // services/api.ts
-const API_URL = import.meta.env.VITE_API_URL || 'https://carvajalfit.fydeli.com';
+const API_URL = import.meta.env.VITE_API_URL || 'https://carvajalfit.com';
 
 class ApiService {
   private getAuthToken(): string | null {
@@ -173,7 +173,7 @@ export const apiService = new ApiService();
 // services/api.ts
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://carvajalfit.fydeli.com';
+const API_URL = import.meta.env.VITE_API_URL || 'https://carvajalfit.com';
 
 const apiClient = axios.create({
   baseURL: API_URL,

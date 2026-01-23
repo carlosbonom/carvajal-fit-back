@@ -60,6 +60,15 @@ export class SubscriptionsController {
     return this.subscriptionsService.migrateSubscribers(migrateDto.subscribers);
   }
 
+  @Post('migrate-json')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @HttpCode(HttpStatus.OK)
+  async migrateJsonSubscribers(
+    @Body() body: any[],
+  ) {
+    return this.subscriptionsService.migrateJsonSubscribers(body);
+  }
+
   @Public()
   @Get('plans')
   async getAvailablePlans(): Promise<SubscriptionPlansResponseDto> {
@@ -238,6 +247,22 @@ export class SubscriptionsController {
     };
   }
 
+  @Post('paypal/subscription')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async createPayPalSubscription(
+    @CurrentUser() user: User,
+    @Body() createPayPalDto: CreatePayPalOrderDto,
+  ): Promise<{ orderId: string; approveUrl: string; subscriptionId: string }> {
+    return this.subscriptionsService.createPayPalSubscription(
+      user,
+      createPayPalDto.planId,
+      createPayPalDto.billingCycleId,
+      createPayPalDto.currency,
+      createPayPalDto.subscriptionId,
+    );
+  }
+
   @Post('paypal/create')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
@@ -320,6 +345,14 @@ export class SubscriptionsController {
     capture: any;
   }> {
     return this.subscriptionsService.verifyPayPalCapture(verifyDto.captureId);
+  }
+
+  @Post('paypal/webhook')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  async handlePayPalWebhook(@Body() body: any) {
+    await this.subscriptionsService.handlePayPalWebhook(body);
+    return { received: true };
   }
 
   @Post('mercadopago/create')

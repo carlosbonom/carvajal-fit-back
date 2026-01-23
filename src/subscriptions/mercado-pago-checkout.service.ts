@@ -10,7 +10,7 @@ export class MercadoPagoCheckoutService {
 
   constructor(private configService: ConfigService) {
     this.accessToken = this.configService.get<string>('MERCADOPAGO_ACCESS_TOKEN') || '';
-    
+
     if (!this.accessToken) {
       console.warn('MERCADOPAGO_ACCESS_TOKEN no está configurado. Mercado Pago Checkout no funcionará.');
     }
@@ -82,7 +82,7 @@ export class MercadoPagoCheckoutService {
         back_urls: backUrls,
         // Quitar auto_return porque Mercado Pago tiene problemas con localhost cuando se usa auto_return
         // El usuario será redirigido automáticamente usando back_urls
-        notification_url: `${process.env.APP_URL || 'https://carvajalfit.fydeli.com'}/subscriptions/mercadopago/webhook`,
+        notification_url: `${process.env.APP_URL || 'https://carvajalfit.com'}/subscriptions/mercadopago/webhook`,
         statement_descriptor: 'Carvajal Fit',
         payment_methods: {
           excluded_payment_methods: [],

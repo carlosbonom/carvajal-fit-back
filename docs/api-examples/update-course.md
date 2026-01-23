@@ -83,7 +83,7 @@ async function updateCourse(
   token: string
 ): Promise<CourseResponse> {
   try {
-    const response = await fetch(`https://carvajalfit.fydeli.com/courses/${courseId}`, {
+    const response = await fetch(`https://carvajalfit.com/courses/${courseId}`, {
       method: 'PATCH',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -221,7 +221,7 @@ export function useUpdateCourse(token: string | null): UseUpdateCourseResult {
       setError(null);
       setSuccess(false);
 
-      const response = await fetch(`https://carvajalfit.fydeli.com/courses/${courseId}`, {
+      const response = await fetch(`https://carvajalfit.com/courses/${courseId}`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -344,7 +344,7 @@ function EditCourseForm({ courseId }: { courseId: string }) {
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'https://carvajalfit.fydeli.com',
+  baseURL: 'https://carvajalfit.com',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -419,7 +419,7 @@ updateCourse('course-uuid-123', {
 
 ```bash
 # Ejemplo 1: Actualización parcial básica
-curl -X PATCH "https://carvajalfit.fydeli.com/courses/course-uuid-123" \
+curl -X PATCH "https://carvajalfit.com/courses/course-uuid-123" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -429,7 +429,7 @@ curl -X PATCH "https://carvajalfit.fydeli.com/courses/course-uuid-123" \
   }'
 
 # Ejemplo 2: Actualización con metadata
-curl -X PATCH "https://carvajalfit.fydeli.com/courses/course-uuid-123" \
+curl -X PATCH "https://carvajalfit.com/courses/course-uuid-123" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -445,7 +445,7 @@ curl -X PATCH "https://carvajalfit.fydeli.com/courses/course-uuid-123" \
   }'
 
 # Ejemplo 3: Cambiar solo el nivel y publicar
-curl -X PATCH "https://carvajalfit.fydeli.com/courses/course-uuid-123" \
+curl -X PATCH "https://carvajalfit.com/courses/course-uuid-123" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -454,7 +454,7 @@ curl -X PATCH "https://carvajalfit.fydeli.com/courses/course-uuid-123" \
   }'
 
 # Ejemplo 4: Actualizar slug
-curl -X PATCH "https://carvajalfit.fydeli.com/courses/course-uuid-123" \
+curl -X PATCH "https://carvajalfit.com/courses/course-uuid-123" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -462,7 +462,7 @@ curl -X PATCH "https://carvajalfit.fydeli.com/courses/course-uuid-123" \
   }'
 
 # Ejemplo 5: Cambiar el creador
-curl -X PATCH "https://carvajalfit.fydeli.com/courses/course-uuid-123" \
+curl -X PATCH "https://carvajalfit.com/courses/course-uuid-123" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -470,7 +470,7 @@ curl -X PATCH "https://carvajalfit.fydeli.com/courses/course-uuid-123" \
   }'
 
 # Ejemplo 6: Eliminar la relación con el creador (establecer a null)
-curl -X PATCH "https://carvajalfit.fydeli.com/courses/course-uuid-123" \
+curl -X PATCH "https://carvajalfit.com/courses/course-uuid-123" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

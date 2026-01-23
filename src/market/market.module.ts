@@ -4,6 +4,7 @@ import { MarketController } from './market.controller';
 import { MarketService } from './market.service';
 import { PaymentsModule } from '../payments/payments.module';
 import { MarketingModule } from '../marketing/marketing.module';
+import { LiorenModule } from '../lioren/lioren.module';
 import { Order } from '../database/entities/orders.entity';
 import { Product } from '../database/entities/products.entity';
 import { User } from '../database/entities/users.entity';
@@ -17,6 +18,7 @@ import { User } from '../database/entities/users.entity';
         ]),
         PaymentsModule,
         MarketingModule,
+        LiorenModule,
     ],
     controllers: [MarketController],
     providers: [MarketService],

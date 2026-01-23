@@ -1,0 +1,55 @@
+{
+    "info": {
+        "_postman_id": "c62f8b5f-17cf-4a4b-8f1e-e7e0e7a2b0c1",
+        "name": "Carvajal Fit - JSON Migration",
+        "description": "Endpoint para migración de usuarios desde el formato JSON del sistema antiguo.",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Migrate JSON Subscribers",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{access_token}}",
+                        "type": "text"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "[\n  {\n    \"user_name\": \"vicente.altaner\",\n    \"member_first_name\": \"\",\n    \"member_last_name\": \"\",\n    \"member_email\": \"vicente.altaner@gmail.com\",\n    \"membership_status\": \"active\",\n    \"member_since\": \"2026-01-19 00:00:00\",\n    \"membership_expiration\": \"\"\n  },\n  {\n    \"user_name\": \"evelyn natalia.betancourt garrido\",\n    \"member_first_name\": \"Evelyn Natalia\",\n    \"member_last_name\": \"Betancourt Garrido\",\n    \"member_email\": \"ebnatalia@gmail.com\",\n    \"membership_status\": \"active\",\n    \"member_since\": \"2026-01-19 09:33:48\",\n    \"membership_expiration\": \"\"\n  }\n]"
+                },
+                "url": {
+                    "raw": "{{base_url}}/subscriptions/migrate-json",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "subscriptions",
+                        "migrate-json"
+                    ]
+                },
+                "description": "Migra usuarios desde el formato JSON del sistema antiguo. El cuerpo debe ser un array con los objetos del archivo csvjson.json."
+            },
+            "response": []
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:3001",
+            "type": "string"
+        },
+        {
+            "key": "access_token",
+            "value": "",
+            "type": "string"
+        }
+    ]
+}

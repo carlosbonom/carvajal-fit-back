@@ -7,6 +7,7 @@ import { SubscriptionPayment, PaymentStatus } from '../database/entities/subscri
 import { MarketingService } from '../marketing/marketing.service';
 import { ConfigService } from '@nestjs/config';
 import { getSubscriptionReminderTemplate } from './subscription-email-templates';
+import { MercadoPagoService } from './mercado-pago.service';
 
 @Injectable()
 export class SubscriptionsReminderService {
@@ -19,6 +20,7 @@ export class SubscriptionsReminderService {
         private readonly subscriptionPaymentRepository: Repository<SubscriptionPayment>,
         private readonly marketingService: MarketingService,
         private readonly configService: ConfigService,
+        private readonly mercadoPagoService: MercadoPagoService,
     ) { }
 
     @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
@@ -32,7 +34,7 @@ export class SubscriptionsReminderService {
 
     private async processReminders() {
         const now = new Date();
-        const appUrl = this.configService.get<string>('APP_URL') || 'https://carvajalfit.fydeli.com';
+        const appUrl = this.configService.get<string>('APP_URL') || 'https://carvajalfit.com';
 
         // 1. Obtener todas las suscripciones activas que vencen pronto o ya vencieron
         // Buscamos activas y aquellas con fallos de pago que aún no han sido suspendidas
@@ -83,10 +85,21 @@ export class SubscriptionsReminderService {
                     if (diffInDays === -5) {
                         isSuspended = true;
                         sub.status = SubscriptionStatus.PAYMENT_FAILED; // O EXPIRED si prefieres
+
+                        // Cancelar también en Mercado Pago para detener intentos de cobro
+                        if (sub.mercadoPagoSubscriptionId) {
+                            try {
+                                await this.mercadoPagoService.cancelSubscription(sub.mercadoPagoSubscriptionId);
+                                this.logger.log(`Suscripción de MP ${sub.mercadoPagoSubscriptionId} cancelada exitosamente.`);
+                            } catch (error) {
+                                this.logger.error(`Error cancelando suscripción MP ${sub.mercadoPagoSubscriptionId}: ${error.message}`);
+                            }
+                        }
+
                         // Podríamos añadir una propiedad 'metadata' para marcar que fue suspendida por falta de pago
                         sub.metadata = { ...sub.metadata, suspendedForNonPayment: true, suspensionDate: now.toISOString() };
                         await this.userSubscriptionRepository.save(sub);
-                        this.logger.warn(`Suscripción de \${sub.user.email} suspendida por falta de pago.`);
+                        this.logger.warn(`Suscripción de ${sub.user.email} suspendida por falta de pago.`);
                     }
                 }
 

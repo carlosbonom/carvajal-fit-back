@@ -5,6 +5,8 @@ import axios, { AxiosInstance } from 'axios';
 export interface LiorenBoletaRequest {
   emisor: {
     rut: string; // Sin puntos ni guión
+    tipodoc: string;
+    servicio: number;
   };
   tipodoc: '33' | '34' | '39' | '41'; // 33: Factura, 39: Boleta
   folio?: number;
@@ -14,8 +16,8 @@ export interface LiorenBoletaRequest {
     rs: string; // Razón Social
     giro?: string;
     direccion?: string;
-    comuna?: string;
-    ciudad?: string;
+    comuna?: number;
+    ciudad?: number;
     email?: string;
     fono?: string; // Teléfono
   };
@@ -87,7 +89,11 @@ export class LiorenService {
 
       const fullData: LiorenBoletaRequest = {
         ...boletaData,
-        emisor: { rut: this.emisorRut },
+        emisor: {
+          rut: this.emisorRut,
+          tipodoc: boletaData.tipodoc,
+          servicio: 3, // 3: Boleta de Ventas y Servicios
+        },
       };
 
       // Limpiar RUTs (remover puntos y guiones)
@@ -208,8 +214,8 @@ export class LiorenService {
       nombre: string;
       email: string;
       direccion?: string;
-      comuna?: string;
-      ciudad?: string;
+      comuna: number;
+      ciudad: number;
       telefono?: string;
     },
     pago: {
@@ -218,18 +224,19 @@ export class LiorenService {
       fechaPago: Date;
       referencia?: string;
     },
+    tipodoc: '33' | '34' | '39' | '41' = '39',
   ): Promise<{ boleta: LiorenBoletaResponse; pdf: Buffer }> {
     // Preparar datos de la boleta
     const boletaData: Omit<LiorenBoletaRequest, 'emisor'> = {
-      tipodoc: '39', // Boleta Electrónica
+      tipodoc, // Tipo de documento solicitado
       fecha: pago.fechaPago.toISOString().split('T')[0], // YYYY-MM-DD
       receptor: {
         rut: usuario.rut,
         rs: usuario.nombre,
         email: usuario.email,
         direccion: usuario.direccion,
-        comuna: usuario.comuna,
-        ciudad: usuario.ciudad || 'Santiago',
+        comuna: usuario.comuna || 1, // ID por defecto si no se provee
+        ciudad: usuario.ciudad || 1, // ID por defecto si no se provee
         fono: usuario.telefono,
       },
       detalles: [
@@ -237,7 +244,7 @@ export class LiorenService {
           nombre: pago.descripcion,
           cantidad: 1,
           precio: pago.monto,
-          exento: false,
+          exento: tipodoc === '34' || tipodoc === '41',
         },
       ],
       expects: 'pdf',
@@ -252,7 +259,67 @@ export class LiorenService {
       pdf = Buffer.from(response.pdf, 'base64');
     } else {
       // Si no viene el PDF en la respuesta, lo solicitamos explícitamente
-      pdf = await this.obtenerPDF(response.folio, '39');
+      pdf = await this.obtenerPDF(response.folio, tipodoc);
+    }
+
+    return { boleta: response, pdf };
+  }
+
+  /**
+   * Genera una boleta para una compra general (market)
+   */
+  async generarBoletaCompra(
+    usuario: {
+      rut: string;
+      nombre: string;
+      email: string;
+      direccion?: string;
+      comuna: number;
+      ciudad: number;
+      telefono?: string;
+    },
+    items: Array<{
+      nombre: string;
+      cantidad: number;
+      precio: number;
+      exento?: boolean;
+    }>,
+    pago: {
+      fechaPago: Date;
+      referencia?: string;
+    },
+    tipodoc: '33' | '34' | '39' | '41' = '39',
+  ): Promise<{ boleta: LiorenBoletaResponse; pdf: Buffer }> {
+    // Preparar datos de la boleta
+    const boletaData: Omit<LiorenBoletaRequest, 'emisor'> = {
+      tipodoc, // Tipo de documento solicitado
+      fecha: pago.fechaPago.toISOString().split('T')[0], // YYYY-MM-DD
+      receptor: {
+        rut: usuario.rut,
+        rs: usuario.nombre,
+        email: usuario.email,
+        direccion: usuario.direccion,
+        comuna: usuario.comuna || 1, // ID por defecto si no se provee
+        ciudad: usuario.ciudad || 1, // ID por defecto si no se provee
+        fono: usuario.telefono,
+      },
+      detalles: items.map(item => ({
+        ...item,
+        exento: item.exento ?? (tipodoc === '34' || tipodoc === '41'),
+      })),
+      expects: 'pdf',
+    };
+
+    // Emitir la boleta
+    const response = await this.emitirBoleta(boletaData);
+
+    let pdf: Buffer;
+
+    if (response.pdf) {
+      pdf = Buffer.from(response.pdf, 'base64');
+    } else {
+      // Si no viene el PDF en la respuesta, lo solicitamos explícitamente
+      pdf = await this.obtenerPDF(response.folio, tipodoc);
     }
 
     return { boleta: response, pdf };

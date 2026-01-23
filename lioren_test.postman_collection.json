@@ -1,0 +1,81 @@
+{
+    "info": {
+        "_postman_id": "73e04b07-1520-495f-afc7-e35454fafb78",
+        "name": "Lioren Testing",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Test Boleta",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "http://localhost:3001/lioren/test-boleta?rut=1-9&monto=1000&comuna=1&ciudad=1&tipodoc=39",
+                    "protocol": "http",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "3001",
+                    "path": [
+                        "lioren",
+                        "test-boleta"
+                    ],
+                    "query": [
+                        {
+                            "key": "rut",
+                            "value": "1-9"
+                        },
+                        {
+                            "key": "monto",
+                            "value": "1000"
+                        },
+                        {
+                            "key": "comuna",
+                            "value": "1"
+                        },
+                        {
+                            "key": "ciudad",
+                            "value": "1"
+                        },
+                        {
+                            "key": "tipodoc",
+                            "value": "39"
+                        }
+                    ]
+                }
+            },
+            "response": []
+        },
+        {
+            "name": "Download PDF",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "http://localhost:3001/lioren/pdf?folio=1&tipodoc=39",
+                    "protocol": "http",
+                    "host": [
+                        "localhost"
+                    ],
+                    "port": "3001",
+                    "path": [
+                        "lioren",
+                        "pdf"
+                    ],
+                    "query": [
+                        {
+                            "key": "folio",
+                            "value": "1"
+                        },
+                        {
+                            "key": "tipodoc",
+                            "value": "39"
+                        }
+                    ]
+                }
+            },
+            "response": []
+        }
+    ]
+}

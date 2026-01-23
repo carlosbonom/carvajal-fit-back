@@ -17,7 +17,7 @@ Agrega estas variables a tu archivo `.env`:
 
 ```env
 MERCADOPAGO_ACCESS_TOKEN=tu_access_token_de_mercadopago
-APP_URL=https://carvajalfit.fydeli.com  # URL de tu aplicación (opcional)
+APP_URL=https://carvajalfit.com  # URL de tu aplicación (opcional)
 ```
 
 ## 🚀 Endpoints

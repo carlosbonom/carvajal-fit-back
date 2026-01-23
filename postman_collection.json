@@ -40,8 +40,13 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/register",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "register"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
             },
             "description": "Registra un nuevo usuario en el sistema"
           },
@@ -79,8 +84,13 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/login",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "login"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
             },
             "description": "Inicia sesión con email y contraseña"
           },
@@ -104,8 +114,13 @@
             ],
             "url": {
               "raw": "{{base_url}}/auth/me",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "me"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
             },
             "description": "Obtiene los datos del usuario autenticado"
           },
@@ -139,8 +154,13 @@
             ],
             "url": {
               "raw": "{{base_url}}/auth/logout",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "logout"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
             },
             "description": "Cierra sesión e invalida el refresh token"
           },
@@ -183,8 +203,13 @@
             },
             "url": {
               "raw": "{{base_url}}/auth/refresh",
-              "host": ["{{base_url}}"],
-              "path": ["auth", "refresh"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
             },
             "description": "Renueva el access token usando el refresh token"
           },
@@ -196,9 +221,8 @@
   "variable": [
     {
       "key": "base_url",
-      "value": "https://carvajalfit.fydeli.com",
+      "value": "https://carvajalfit.com",
       "type": "string"
     }
   ]
 }
-
