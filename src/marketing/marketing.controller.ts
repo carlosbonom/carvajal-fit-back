@@ -15,6 +15,7 @@ import { MarketingService } from './marketing.service';
 import { CreateEmailTemplateDto } from './dto/create-email-template.dto';
 import { UpdateEmailTemplateDto } from './dto/update-email-template.dto';
 import { SendEmailDto } from './dto/send-email.dto';
+import { SendMigrationNotificationDto } from './dto/send-migration-notification.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '../database/entities/users.entity';
@@ -22,7 +23,7 @@ import { User } from '../database/entities/users.entity';
 @Controller('marketing')
 @UseGuards(JwtAuthGuard)
 export class MarketingController {
-  constructor(private readonly marketingService: MarketingService) {}
+  constructor(private readonly marketingService: MarketingService) { }
 
   @Get('templates')
   findAll() {
@@ -58,6 +59,19 @@ export class MarketingController {
       throw new ForbiddenException('No autorizado. Solo administradores pueden enviar emails masivos.');
     }
     return this.marketingService.sendBulkEmails(sendDto);
+  }
+
+  @Post('send-migration-notification')
+  @HttpCode(HttpStatus.OK)
+  async sendMigrationNotification(
+    @Body() dto: SendMigrationNotificationDto,
+    @CurrentUser() user: User,
+  ) {
+    // Solo admins pueden enviar notificaciones de migración
+    if (user.role !== 'admin') {
+      throw new ForbiddenException('No autorizado. Solo administradores pueden enviar notificaciones de migración.');
+    }
+    return this.marketingService.sendMigrationNotificationBulk(dto.recipients);
   }
 }
 

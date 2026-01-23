@@ -1,0 +1,174 @@
+{
+    "info": {
+        "_postman_id": "migration-notification-001",
+        "name": "Migration Notification - Club Carvajal Fit",
+        "description": "Colección para enviar notificaciones de migración masivas a usuarios",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Auth",
+            "item": [
+                {
+                    "name": "Login Admin",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "if (pm.response.code === 200 || pm.response.code === 201) {",
+                                    "    const jsonData = pm.response.json();",
+                                    "    pm.environment.set(\"jwt_token\", jsonData.access_token || jsonData.token);",
+                                    "    console.log(\"Token guardado:\", jsonData.access_token || jsonData.token);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"admin@carvajalfit.com\",\n  \"password\": \"tu_password_aqui\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "login"
+                            ]
+                        },
+                        "description": "Login como administrador para obtener el token JWT"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Migration Notification",
+            "item": [
+                {
+                    "name": "Enviar a un solo usuario",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "description": "Token JWT del admin"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"recipients\": [\n    {\n      \"email\": \"usuario@example.com\",\n      \"name\": \"Juan Pérez\"\n    }\n  ]\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/marketing/send-migration-notification",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "marketing",
+                                "send-migration-notification"
+                            ]
+                        },
+                        "description": "Envía email de notificación de migración a un solo usuario"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Enviar a múltiples usuarios",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "description": "Token JWT del admin"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"recipients\": [\n    {\n      \"email\": \"usuario1@example.com\",\n      \"name\": \"Juan Pérez\"\n    },\n    {\n      \"email\": \"usuario2@example.com\",\n      \"name\": \"María González\"\n    },\n    {\n      \"email\": \"usuario3@example.com\",\n      \"name\": \"Carlos Rodríguez\"\n    },\n    {\n      \"email\": \"usuario4@example.com\",\n      \"name\": \"Ana Martínez\"\n    },\n    {\n      \"email\": \"usuario5@example.com\",\n      \"name\": \"Pedro López\"\n    }\n  ]\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/marketing/send-migration-notification",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "marketing",
+                                "send-migration-notification"
+                            ]
+                        },
+                        "description": "Envía email de notificación de migración a múltiples usuarios"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Enviar a lista grande (ejemplo 20 usuarios)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "description": "Token JWT del admin"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"recipients\": [\n    {\"email\": \"usuario1@example.com\", \"name\": \"Usuario 1\"},\n    {\"email\": \"usuario2@example.com\", \"name\": \"Usuario 2\"},\n    {\"email\": \"usuario3@example.com\", \"name\": \"Usuario 3\"},\n    {\"email\": \"usuario4@example.com\", \"name\": \"Usuario 4\"},\n    {\"email\": \"usuario5@example.com\", \"name\": \"Usuario 5\"},\n    {\"email\": \"usuario6@example.com\", \"name\": \"Usuario 6\"},\n    {\"email\": \"usuario7@example.com\", \"name\": \"Usuario 7\"},\n    {\"email\": \"usuario8@example.com\", \"name\": \"Usuario 8\"},\n    {\"email\": \"usuario9@example.com\", \"name\": \"Usuario 9\"},\n    {\"email\": \"usuario10@example.com\", \"name\": \"Usuario 10\"},\n    {\"email\": \"usuario11@example.com\", \"name\": \"Usuario 11\"},\n    {\"email\": \"usuario12@example.com\", \"name\": \"Usuario 12\"},\n    {\"email\": \"usuario13@example.com\", \"name\": \"Usuario 13\"},\n    {\"email\": \"usuario14@example.com\", \"name\": \"Usuario 14\"},\n    {\"email\": \"usuario15@example.com\", \"name\": \"Usuario 15\"},\n    {\"email\": \"usuario16@example.com\", \"name\": \"Usuario 16\"},\n    {\"email\": \"usuario17@example.com\", \"name\": \"Usuario 17\"},\n    {\"email\": \"usuario18@example.com\", \"name\": \"Usuario 18\"},\n    {\"email\": \"usuario19@example.com\", \"name\": \"Usuario 19\"},\n    {\"email\": \"usuario20@example.com\", \"name\": \"Usuario 20\"}\n  ]\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/marketing/send-migration-notification",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "marketing",
+                                "send-migration-notification"
+                            ]
+                        },
+                        "description": "Ejemplo de envío masivo a 20 usuarios. Se procesarán en lotes de 10."
+                    },
+                    "response": []
+                }
+            ]
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:3001/v1",
+            "type": "string"
+        },
+        {
+            "key": "jwt_token",
+            "value": "",
+            "type": "string"
+        }
+    ]
+}

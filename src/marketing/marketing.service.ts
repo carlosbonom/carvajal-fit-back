@@ -480,6 +480,87 @@ export class MarketingService implements OnModuleInit {
   }
 
   /**
+   * Envía notificaciones de migración masivas a múltiples usuarios
+   * Informa sobre la nueva página y les pide que recuperen su contraseña
+   */
+  async sendMigrationNotificationBulk(
+    recipients: Array<{ email: string; name: string }>,
+  ): Promise<{ success: number; failed: number; errors?: string[] }> {
+    if (!this.resend) {
+      throw new BadRequestException('RESEND_API_KEY no está configurado');
+    }
+
+    const loginUrl = 'https://carvajalfit.com/login';
+    const fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL') || 'noreply@carvajalfit.com';
+    const fromName = this.configService.get<string>('RESEND_FROM_NAME') || 'Club Carvajal Fit';
+
+    // Leer el template HTML desde el archivo
+    const fs = require('fs');
+    const path = require('path');
+    const templatePath = path.join(__dirname, 'templates', 'migration-notification.html');
+    let htmlTemplate: string;
+
+    try {
+      htmlTemplate = fs.readFileSync(templatePath, 'utf-8');
+    } catch (error) {
+      console.error('Error leyendo template de migración:', error);
+      throw new BadRequestException('No se pudo cargar el template de email');
+    }
+
+    let success = 0;
+    let failed = 0;
+    const errors: string[] = [];
+
+    // Procesar emails en lotes para evitar rate limits
+    const batchSize = 10;
+    for (let i = 0; i < recipients.length; i += batchSize) {
+      const batch = recipients.slice(i, i + batchSize);
+
+      const promises = batch.map(async (recipient) => {
+        try {
+          // Reemplazar variables en el template
+          const variables = {
+            name: recipient.name || 'Miembro',
+            email: recipient.email,
+            loginUrl: loginUrl,
+            year: new Date().getFullYear().toString(),
+          };
+
+          const htmlContent = this.replaceVariables(htmlTemplate, variables);
+
+          await this.resend.emails.send({
+            from: `${fromName} <${fromEmail}>`,
+            to: recipient.email,
+            subject: '¡Importante! Nueva página de Club Carvajal Fit 🚀',
+            html: htmlContent,
+          });
+
+          success++;
+          console.log(`Email de notificación de migración enviado a ${recipient.email}`);
+        } catch (error: any) {
+          failed++;
+          const errorMessage = `Error enviando a ${recipient.email}: ${error.message || 'Error desconocido'}`;
+          errors.push(errorMessage);
+          console.error(errorMessage, error);
+        }
+      });
+
+      await Promise.all(promises);
+
+      // Pequeña pausa entre lotes para evitar rate limits
+      if (i + batchSize < recipients.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    return {
+      success,
+      failed,
+      errors: errors.length > 0 ? errors : undefined,
+    };
+  }
+
+  /**
    * Envía un email con el producto digital comprado
    */
   async sendDigitalProductEmail(
