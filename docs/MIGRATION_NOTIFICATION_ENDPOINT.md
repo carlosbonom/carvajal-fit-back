@@ -1,80 +1,119 @@
-# Migration Notification Endpoint
+# 🚀 Endpoint de Migración - Envío Automático a Suscriptores Activos
 
-## Descripción
-Endpoint para enviar notificaciones masivas de migración a usuarios, informándoles sobre la nueva página web y solicitándoles que recuperen su contraseña.
+## ⭐ Nuevo Endpoint Recomendado
 
-## Endpoint
+### POST `/v1/marketing/send-migration-notification-to-active-subscribers`
 
-**POST** `/v1/marketing/send-migration-notification`
+Este es el endpoint **más fácil y recomendado** para enviar notificaciones de migración.
 
-### Autenticación
-- Requiere autenticación JWT
-- Solo usuarios con rol `admin` pueden usar este endpoint
+#### ✨ Características
 
-### Request Body
+- ✅ **Automático**: No necesitas proporcionar lista de emails
+- ✅ **Inteligente**: Consulta automáticamente la base de datos
+- ✅ **Seguro**: Solo envía a usuarios con suscripción activa
+- ✅ **Sin duplicados**: Elimina usuarios duplicados automáticamente
+- ✅ **Estadísticas completas**: Retorna información detallada del envío
 
+#### 📋 Uso
+
+**Request:**
+```bash
+POST /v1/marketing/send-migration-notification-to-active-subscribers
+Authorization: Bearer YOUR_JWT_TOKEN
+```
+
+**No requiere body** - ¡Así de simple!
+
+**Response:**
+```json
+{
+  "success": 45,
+  "failed": 0,
+  "totalActiveSubscribers": 45
+}
+```
+
+#### 🔐 Autenticación
+
+Solo usuarios con rol `admin` pueden usar este endpoint.
+
+#### 📊 Respuestas Posibles
+
+**✅ Éxito Total:**
+```json
+{
+  "success": 100,
+  "failed": 0,
+  "totalActiveSubscribers": 100
+}
+```
+
+**⚠️ Éxito Parcial:**
+```json
+{
+  "success": 95,
+  "failed": 5,
+  "totalActiveSubscribers": 100,
+  "errors": [
+    "Error enviando a usuario1@example.com: Invalid email",
+    "Error enviando a usuario2@example.com: Rate limit exceeded"
+  ]
+}
+```
+
+**ℹ️ Sin Suscriptores Activos:**
+```json
+{
+  "success": 0,
+  "failed": 0,
+  "totalActiveSubscribers": 0
+}
+```
+
+---
+
+## 📧 Endpoint Alternativo (Manual)
+
+### POST `/v1/marketing/send-migration-notification`
+
+Usa este endpoint si necesitas enviar a una lista específica de usuarios.
+
+**Request Body:**
 ```json
 {
   "recipients": [
     {
-      "email": "usuario1@example.com",
+      "email": "usuario@example.com",
       "name": "Juan Pérez"
-    },
-    {
-      "email": "usuario2@example.com",
-      "name": "María González"
     }
   ]
 }
 ```
 
-### Response
+---
 
-```json
-{
-  "success": 2,
-  "failed": 0
-}
+## 🎯 Comparación
+
+| Característica | Auto (Recomendado) | Manual |
+|----------------|-------------------|--------|
+| Requiere lista de emails | ❌ No | ✅ Sí |
+| Consulta DB automáticamente | ✅ Sí | ❌ No |
+| Filtra solo activos | ✅ Sí | ❌ No |
+| Elimina duplicados | ✅ Sí | ⚠️ Manual |
+| Facilidad de uso | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
+
+---
+
+## 💡 Ejemplo de Uso con cURL
+
+### Envío Automático (Recomendado)
+
+```bash
+curl -X POST http://localhost:3001/v1/marketing/send-migration-notification-to-active-subscribers \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
-En caso de errores:
-
-```json
-{
-  "success": 1,
-  "failed": 1,
-  "errors": [
-    "Error enviando a usuario2@example.com: Invalid email address"
-  ]
-}
-```
-
-## Características del Email
-
-El email enviado incluye:
-- ✅ Diseño responsive y profesional
-- ✅ Notificación sobre la nueva página web
-- ✅ Instrucciones paso a paso para recuperar contraseña
-- ✅ Botón CTA que lleva a `https://carvajalfit.com/login`
-- ✅ Enlace alternativo en texto plano
-- ✅ Personalización con el nombre del usuario
-- ✅ Branding de Club Carvajal Fit
-
-## Procesamiento
-
-- Los emails se envían en lotes de 10 para evitar rate limits
-- Hay una pausa de 1 segundo entre lotes
-- Los errores se capturan y reportan sin detener el proceso completo
-
-## Variables de Entorno Requeridas
-
-```env
-RESEND_API_KEY=tu_api_key_de_resend
-RESEND_FROM_EMAIL=noreply@carvajalfit.com
-RESEND_FROM_NAME=Club Carvajal Fit
-```
-
-## Ejemplo de Uso con cURL
+### Envío Manual
 
 ```bash
 curl -X POST http://localhost:3001/v1/marketing/send-migration-notification \
@@ -90,27 +129,35 @@ curl -X POST http://localhost:3001/v1/marketing/send-migration-notification \
   }'
 ```
 
-## Ejemplo de Uso con Postman
+---
 
-1. Método: POST
-2. URL: `http://localhost:3001/v1/marketing/send-migration-notification`
-3. Headers:
-   - `Content-Type`: `application/json`
-   - `Authorization`: `Bearer YOUR_JWT_TOKEN`
-4. Body (raw JSON):
-```json
-{
-  "recipients": [
-    {
-      "email": "usuario@example.com",
-      "name": "Juan Pérez"
-    }
-  ]
-}
+## 🔧 Proceso Interno
+
+Cuando usas el endpoint automático, el sistema:
+
+1. 🔍 Consulta la tabla `user_subscriptions`
+2. ✅ Filtra solo suscripciones con `status = 'active'`
+3. 👥 Obtiene los datos del usuario relacionado
+4. 🔄 Elimina duplicados por email
+5. 📧 Envía emails en lotes de 10
+6. ⏱️ Pausa 1 segundo entre lotes
+7. 📊 Retorna estadísticas completas
+
+---
+
+## ⚙️ Variables de Entorno Requeridas
+
+```env
+RESEND_API_KEY=tu_api_key
+RESEND_FROM_EMAIL=noreply@carvajalfit.com
+RESEND_FROM_NAME=Club Carvajal Fit
 ```
 
-## Notas
+---
 
-- El endpoint está protegido y solo usuarios administradores pueden usarlo
-- Los emails se envían usando Resend API
-- El contenido del email está en español y es específico para la migración a la nueva plataforma
+## 📝 Notas Importantes
+
+- ⚡ El envío es **asíncrono** - puede tomar tiempo con muchos usuarios
+- 📊 Los logs se muestran en la consola del servidor
+- 🔒 Solo administradores pueden ejecutar este endpoint
+- 📧 El template HTML se lee desde `src/marketing/templates/migration-notification.html`

@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import { EmailTemplate } from '../database/entities/email-template.entity';
+import { UserSubscription, SubscriptionStatus } from '../database/entities/user-subscriptions.entity';
 import { CreateEmailTemplateDto } from './dto/create-email-template.dto';
 import { UpdateEmailTemplateDto } from './dto/update-email-template.dto';
 import { SendEmailDto, EmailRecipientDto } from './dto/send-email.dto';
@@ -15,6 +16,8 @@ export class MarketingService implements OnModuleInit {
   constructor(
     @InjectRepository(EmailTemplate)
     private emailTemplateRepository: Repository<EmailTemplate>,
+    @InjectRepository(UserSubscription)
+    private userSubscriptionRepository: Repository<UserSubscription>,
     private configService: ConfigService,
   ) {
     const apiKey = this.configService.get<string>('RESEND_API_KEY');
@@ -557,6 +560,59 @@ export class MarketingService implements OnModuleInit {
       success,
       failed,
       errors: errors.length > 0 ? errors : undefined,
+    };
+  }
+
+  /**
+   * Envía notificaciones de migración a todos los usuarios con suscripción activa
+   */
+  async sendMigrationNotificationToActiveSubscribers(): Promise<{
+    success: number;
+    failed: number;
+    totalActiveSubscribers: number;
+    errors?: string[]
+  }> {
+    if (!this.resend) {
+      throw new BadRequestException('RESEND_API_KEY no está configurado');
+    }
+
+    // Obtener todos los usuarios con suscripción activa
+    const activeSubscriptions = await this.userSubscriptionRepository.find({
+      where: { status: SubscriptionStatus.ACTIVE },
+      relations: ['user'],
+    });
+
+    if (activeSubscriptions.length === 0) {
+      return {
+        success: 0,
+        failed: 0,
+        totalActiveSubscribers: 0,
+      };
+    }
+
+    // Crear array de recipients desde las suscripciones activas
+    const recipients = activeSubscriptions.map(subscription => ({
+      email: subscription.user.email,
+      name: subscription.user.name || 'Miembro',
+    }));
+
+    // Remover duplicados por email (en caso de que un usuario tenga múltiples suscripciones activas)
+    const uniqueRecipients = recipients.reduce((acc, current) => {
+      const exists = acc.find(item => item.email === current.email);
+      if (!exists) {
+        acc.push(current);
+      }
+      return acc;
+    }, [] as Array<{ email: string; name: string }>);
+
+    console.log(`Enviando notificaciones de migración a ${uniqueRecipients.length} usuarios con suscripción activa`);
+
+    // Usar el método existente para enviar los emails
+    const result = await this.sendMigrationNotificationBulk(uniqueRecipients);
+
+    return {
+      ...result,
+      totalActiveSubscribers: uniqueRecipients.length,
     };
   }
 

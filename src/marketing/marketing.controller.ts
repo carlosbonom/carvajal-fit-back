@@ -73,5 +73,17 @@ export class MarketingController {
     }
     return this.marketingService.sendMigrationNotificationBulk(dto.recipients);
   }
+
+  @Post('send-migration-notification-to-active-subscribers')
+  @HttpCode(HttpStatus.OK)
+  async sendMigrationNotificationToActiveSubscribers(
+    @CurrentUser() user: User,
+  ) {
+    // Solo admins pueden enviar notificaciones de migración
+    if (user.role !== 'admin') {
+      throw new ForbiddenException('No autorizado. Solo administradores pueden enviar notificaciones de migración.');
+    }
+    return this.marketingService.sendMigrationNotificationToActiveSubscribers();
+  }
 }
 
