@@ -498,14 +498,32 @@ export class MarketingService implements OnModuleInit {
     const loginUrl = 'https://carvajalfit.com/login';
     const fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL') || 'noreply@carvajalfit.com';
     const fromName = this.configService.get<string>('RESEND_FROM_NAME') || 'Club Carvajal Fit';
-    const templatePath = path.join(__dirname, 'templates', 'migration-notification.html');
+    // Intentar encontrar el template en dist (producción) o src (desarrollo)
+    let templatePath = path.join(__dirname, 'templates', 'migration-notification.html');
+
+    // Si no existe en la ruta relativa actual, probar en la ruta absoluta desde el root si es necesario
+    // Pero con nest-cli assets configurado, debería estar en dist/marketing/templates/
+
+    if (!fs.existsSync(templatePath)) {
+      console.warn(`Template no encontrado en ${templatePath}, intentando ruta alternativa...`);
+      // Fallback para entornos donde la estructura de carpetas sea distinta
+      const rootPath = process.cwd();
+      const altPath = path.join(rootPath, 'src', 'marketing', 'templates', 'migration-notification.html');
+      if (fs.existsSync(altPath)) {
+        templatePath = altPath;
+      }
+    }
+
     let htmlTemplate: string;
 
     try {
+      if (!fs.existsSync(templatePath)) {
+        throw new Error(`Archivo no encontrado en: ${templatePath}`);
+      }
       htmlTemplate = fs.readFileSync(templatePath, 'utf-8');
     } catch (error) {
       console.error('Error leyendo template de migración:', error);
-      throw new BadRequestException('No se pudo cargar el template de email');
+      throw new BadRequestException(`No se pudo cargar el template de email. Buscado en: ${templatePath}`);
     }
 
     let success = 0;
