@@ -17,6 +17,7 @@ import { UserContentProgress } from '../database/entities/user-content-progress.
 import { Content } from '../database/entities/content.entity';
 import { PasswordResetCode } from '../database/entities/password-reset-code.entity';
 import { SubscriptionsReminderService } from './subscriptions-reminder.service';
+import { MarketModule } from '../market/market.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { SubscriptionsReminderService } from './subscriptions-reminder.service';
     MarketingModule,
     LiorenModule,
     PaymentsModule,
+    MarketModule,
   ],
   controllers: [SubscriptionsController],
   providers: [SubscriptionsService, MercadoPagoService, SubscriptionsReminderService],

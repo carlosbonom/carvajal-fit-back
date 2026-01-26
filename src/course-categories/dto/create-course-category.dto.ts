@@ -28,6 +28,10 @@ export class CreateCourseCategoryDto {
   @IsOptional()
   description?: string;
 
+  @IsString()
+  @IsOptional()
+  coverUrl?: string;
+
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;

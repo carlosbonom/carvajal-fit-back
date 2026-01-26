@@ -31,6 +31,10 @@ export class UpdateCourseCategoryDto {
   description?: string;
 
   @IsOptional()
+  @IsString()
+  coverUrl?: string;
+
+  @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 

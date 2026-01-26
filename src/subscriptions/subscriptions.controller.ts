@@ -426,5 +426,11 @@ export class SubscriptionsController {
       redirectUrl: result.redirectUrl,
     };
   }
+
+  @Get('mercadopago-all')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  async getAllMercadoPagoSubscriptions(@Query() query: any) {
+    return this.subscriptionsService.getAllMercadoPagoSubscriptions(query);
+  }
 }
 

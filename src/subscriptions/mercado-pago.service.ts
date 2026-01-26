@@ -470,5 +470,35 @@ export class MercadoPagoService {
       return defaultUrl;
     }
   }
+
+  async searchSubscriptions(filters: any = {}) {
+    try {
+      const apiUrl = `${this.baseUrl}/preapproval/search`;
+
+      // Los parámetros de búsqueda comunes de Mercado Pago:
+      // status, payer_email, reason, external_reference, sort, limit, offset
+      const response = await axios.get(apiUrl, {
+        params: filters,
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+        },
+      });
+
+      return response.data;
+    } catch (error: any) {
+      console.error('Error buscando suscripciones en Mercado Pago:', error);
+
+      if (axios.isAxiosError(error) && error.response) {
+        const errorData = error.response.data || { message: 'Error desconocido' };
+        throw new BadRequestException(
+          `Error al buscar suscripciones en Mercado Pago: ${(errorData as any).message || 'Error desconocido'}`,
+        );
+      }
+
+      throw new BadRequestException(
+        `Error al buscar suscripciones en Mercado Pago: ${error.message || 'Error desconocido'}`,
+      );
+    }
+  }
 }
 

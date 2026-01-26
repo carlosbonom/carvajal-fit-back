@@ -23,6 +23,7 @@ import { PayPalService } from '../payments/paypal.service';
 import { SubscriptionPayment, PaymentStatus } from '../database/entities/subscription-payments.entity';
 import { UserContentProgress } from '../database/entities/user-content-progress.entity';
 import { Content } from '../database/entities/content.entity';
+import { MarketService } from '../market/market.service';
 import { GetMembersQueryDto } from './dto/get-members-query.dto';
 import { MembersResponseDto, MemberDto, MemberStatsDto } from './dto/members-response.dto';
 import { MarketingService } from '../marketing/marketing.service';
@@ -57,6 +58,7 @@ export class SubscriptionsService {
     private readonly paypalService: PayPalService,
     private readonly marketingService: MarketingService,
     private readonly liorenService: LiorenService,
+    private readonly marketService: MarketService,
     private readonly configService: ConfigService,
   ) { }
 
@@ -338,67 +340,102 @@ export class SubscriptionsService {
     try {
       const { type, data } = notification;
 
-      // Obtener el ID de la suscripción desde Mercado Pago
       if (!data?.id) {
-        console.error('Webhook sin ID de suscripción:', notification);
+        console.error('Webhook sin ID de recurso:', notification);
         return;
       }
 
-      const mercadoPagoSubscriptionId = data.id.toString();
+      console.log(`🔔 Webhook Mercado Pago recibido: ${type} (ID: ${data.id})`);
 
-      // Buscar la suscripción en nuestra base de datos
-      const subscription = await this.userSubscriptionRepository.findOne({
-        where: { mercadoPagoSubscriptionId },
-        relations: ['user', 'plan', 'billingCycle'],
-      });
+      // 1. Manejar notificaciones de tipo 'payment' (pueden ser del Market o Cobros de Suscripción)
+      if (type === 'payment') {
+        const paymentId = data.id.toString();
 
-      if (!subscription) {
-        console.warn(
-          `Suscripción no encontrada para mercadoPagoSubscriptionId: ${mercadoPagoSubscriptionId}`,
-        );
+        // Obtener detalles del pago para ver el external_reference
+        const mpPayment = await this.mercadoPagoService.getPayment(paymentId);
+        const externalReference = mpPayment.external_reference;
+
+        if (!externalReference) {
+          console.warn(`[Webhook] Pago ${paymentId} sin external_reference. No se puede rutear.`);
+          return;
+        }
+
+        // ¿Es una orden del Market?
+        const order = await this.marketService['ordersRepository'].findOne({
+          where: { id: externalReference }
+        });
+
+        if (order) {
+          console.log(`[Webhook] Ruteando pago ${paymentId} al MarketService (Orden: ${order.orderNumber})`);
+          await this.marketService.handleMercadoPagoPayment(paymentId);
+          return;
+        }
+
+        // ¿Es un pago de suscripción?
+        const subscription = await this.userSubscriptionRepository.findOne({
+          where: { id: externalReference },
+          relations: ['user', 'plan', 'billingCycle'],
+        });
+
+        if (subscription) {
+          console.log(`[Webhook] Ruteando pago ${paymentId} a SubscriptionsService (SubID: ${subscription.id})`);
+          await this.handlePaymentNotification(subscription, null, notification); // Pass notification so it fetches the payment
+          return;
+        }
+
+        console.warn(`[Webhook] External reference ${externalReference} no coincide con órdenes ni suscripciones.`);
         return;
       }
 
-      // Obtener información actualizada de Mercado Pago
-      const mpSubscription = await this.mercadoPagoService.getSubscription(mercadoPagoSubscriptionId);
+      // 2. Manejar notificaciones específicas de suscripciones (preapproval, authorized_payment, etc.)
+      if (type.startsWith('subscription_')) {
+        const mercadoPagoSubscriptionId = data.id.toString();
 
-      // Actualizar metadata con la información más reciente
-      subscription.metadata = {
-        ...subscription.metadata,
-        mercadoPagoStatus: mpSubscription.status,
-        lastWebhookType: type,
-        lastWebhookDate: new Date().toISOString(),
-        mpSubscriptionData: mpSubscription,
-      };
+        // Buscar la suscripción por su ID de Mercado Pago
+        const subscription = await this.userSubscriptionRepository.findOne({
+          where: { mercadoPagoSubscriptionId },
+          relations: ['user', 'plan', 'billingCycle'],
+        });
 
-      // Procesar según el tipo de notificación
-      switch (type) {
-        case 'subscription_preapproval':
-          await this.handlePreapprovalNotification(subscription, mpSubscription);
-          break;
+        if (!subscription) {
+          console.warn(`Suscripción no encontrada para mercadoPagoSubscriptionId: ${mercadoPagoSubscriptionId}`);
+          return;
+        }
 
-        case 'subscription_authorized_payment':
-          await this.handleAuthorizedPaymentNotification(subscription, mpSubscription);
-          break;
+        // Obtener información actualizada de Mercado Pago
+        const mpSubscription = await this.mercadoPagoService.getSubscription(mercadoPagoSubscriptionId);
 
-        case 'subscription_payment':
-          await this.handlePaymentNotification(subscription, mpSubscription, notification);
-          break;
+        // Actualizar metadata
+        subscription.metadata = {
+          ...subscription.metadata,
+          mercadoPagoStatus: mpSubscription.status,
+          lastWebhookType: type,
+          lastWebhookDate: new Date().toISOString(),
+          mpSubscriptionData: mpSubscription,
+        };
 
-        case 'payment':
-          // Notificación de pago individual (puede ser de una suscripción)
-          await this.handlePaymentNotification(subscription, mpSubscription, notification);
-          break;
+        // Procesar según el tipo
+        switch (type) {
+          case 'subscription_preapproval':
+            await this.handlePreapprovalNotification(subscription, mpSubscription);
+            break;
+          case 'subscription_authorized_payment':
+            await this.handleAuthorizedPaymentNotification(subscription, mpSubscription);
+            break;
+          case 'subscription_payment':
+            await this.handlePaymentNotification(subscription, mpSubscription, notification);
+            break;
+          default:
+            await this.updateSubscriptionStatusFromMP(subscription, mpSubscription);
+        }
 
-        default:
-          console.log(`Tipo de notificación no manejado: ${type}`);
-          // Actualizar estado según el estado de MP aunque no sea un tipo específico
-          await this.updateSubscriptionStatusFromMP(subscription, mpSubscription);
+        await this.userSubscriptionRepository.save(subscription);
+        return;
       }
 
-      await this.userSubscriptionRepository.save(subscription);
+      console.log(`Tipo de notificación no manejado por el ruteador universal: ${type}`);
     } catch (error) {
-      console.error('Error procesando webhook de Mercado Pago:', error);
+      console.error('Error procesando webhook universal de Mercado Pago:', error);
       throw error;
     }
   }
@@ -2683,5 +2720,9 @@ export class SubscriptionsService {
     }
 
     return { processed, success, failed, errors };
+  }
+
+  async getAllMercadoPagoSubscriptions(query: any) {
+    return this.mercadoPagoService.searchSubscriptions(query);
   }
 }

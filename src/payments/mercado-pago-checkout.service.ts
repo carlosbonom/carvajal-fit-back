@@ -85,7 +85,7 @@ export class MercadoPagoCheckoutService {
                 external_reference: data.externalReference,
                 back_urls: backUrls,
                 // Quitar auto_return porque Mercado Pago tiene problemas con localhost
-                notification_url: `${process.env.APP_URL || 'https://carvajalfit.com'}/subscriptions/mercadopago/webhook`,
+                notification_url: `${process.env.APP_URL || 'https://carvajalfit.com'}/subscriptions/webhook`,
                 statement_descriptor: 'Carvajal Fit',
                 payment_methods: {
                     excluded_payment_methods: [],

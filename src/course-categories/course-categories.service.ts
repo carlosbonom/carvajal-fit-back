@@ -28,6 +28,7 @@ export class CourseCategoriesService {
       name: category.name,
       slug: category.slug,
       description: category.description,
+      coverUrl: category.coverUrl,
       sortOrder: category.sortOrder,
       isActive: category.isActive,
       parentId: category.parentId,
@@ -36,6 +37,7 @@ export class CourseCategoriesService {
         name: category.parent.name,
         slug: category.parent.slug,
         description: category.parent.description,
+        coverUrl: category.parent.coverUrl,
         sortOrder: category.parent.sortOrder,
         isActive: category.parent.isActive,
         parentId: category.parent.parentId,
@@ -47,6 +49,7 @@ export class CourseCategoriesService {
         name: sub.name,
         slug: sub.slug,
         description: sub.description,
+        coverUrl: sub.coverUrl,
         sortOrder: sub.sortOrder,
         isActive: sub.isActive,
         parentId: sub.parentId,
@@ -73,6 +76,7 @@ export class CourseCategoriesService {
       name: category.name,
       slug: category.slug,
       description: category.description,
+      coverUrl: category.coverUrl,
       sortOrder: category.sortOrder,
       isActive: category.isActive,
       parentId: category.parentId,
@@ -120,6 +124,7 @@ export class CourseCategoriesService {
       name: createCategoryDto.name,
       slug: createCategoryDto.slug,
       description: createCategoryDto.description || null,
+      coverUrl: createCategoryDto.coverUrl || null,
       sortOrder: newSortOrder,
       isActive: createCategoryDto.isActive ?? true,
       parentId: createCategoryDto.parentId || null,
@@ -132,6 +137,7 @@ export class CourseCategoriesService {
       name: savedCategory.name,
       slug: savedCategory.slug,
       description: savedCategory.description,
+      coverUrl: savedCategory.coverUrl,
       sortOrder: savedCategory.sortOrder,
       isActive: savedCategory.isActive,
       parentId: savedCategory.parentId,
@@ -190,6 +196,7 @@ export class CourseCategoriesService {
     if (updateCategoryDto.name !== undefined) category.name = updateCategoryDto.name;
     if (updateCategoryDto.slug !== undefined) category.slug = updateCategoryDto.slug;
     if (updateCategoryDto.description !== undefined) category.description = updateCategoryDto.description;
+    if (updateCategoryDto.coverUrl !== undefined) category.coverUrl = updateCategoryDto.coverUrl;
     if (updateCategoryDto.isActive !== undefined) category.isActive = updateCategoryDto.isActive;
     if (updateCategoryDto.parentId !== undefined) category.parentId = updateCategoryDto.parentId;
 
@@ -203,6 +210,7 @@ export class CourseCategoriesService {
       sortOrder: updatedCategory.sortOrder,
       isActive: updatedCategory.isActive,
       parentId: updatedCategory.parentId,
+      coverUrl: updatedCategory.coverUrl,
       createdAt: updatedCategory.createdAt,
       updatedAt: updatedCategory.updatedAt,
     };
@@ -233,6 +241,7 @@ export class CourseCategoriesService {
       sortOrder: updatedCategory.sortOrder,
       isActive: updatedCategory.isActive,
       parentId: updatedCategory.parentId,
+      coverUrl: updatedCategory.coverUrl,
       createdAt: updatedCategory.createdAt,
       updatedAt: updatedCategory.updatedAt,
     };
@@ -265,6 +274,7 @@ export class CourseCategoriesService {
       name: category.name,
       slug: category.slug,
       description: category.description,
+      coverUrl: category.coverUrl,
       sortOrder: category.sortOrder,
       isActive: category.isActive,
       parentId: category.parentId,
@@ -273,6 +283,7 @@ export class CourseCategoriesService {
         name: category.parent.name,
         slug: category.parent.slug,
         description: category.parent.description,
+        coverUrl: category.parent.coverUrl,
         sortOrder: category.parent.sortOrder,
         isActive: category.parent.isActive,
         parentId: category.parent.parentId,
@@ -284,6 +295,7 @@ export class CourseCategoriesService {
         name: sub.name,
         slug: sub.slug,
         description: sub.description,
+        coverUrl: sub.coverUrl,
         sortOrder: sub.sortOrder,
         isActive: sub.isActive,
         parentId: sub.parentId,

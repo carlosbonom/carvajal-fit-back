@@ -1,0 +1,198 @@
+{
+    "info": {
+        "_postman_id": "mercado-pago-search-001",
+        "name": "Mercado Pago Search - Club Carvajal Fit",
+        "description": "Colección para buscar suscripciones en Mercado Pago",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Auth",
+            "item": [
+                {
+                    "name": "Login Admin",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "if (pm.response.code === 200 || pm.response.code === 201) {",
+                                    "    const jsonData = pm.response.json();",
+                                    "    pm.environment.set(\"jwt_token\", jsonData.access_token || jsonData.token);",
+                                    "    console.log(\"Token guardado:\", jsonData.access_token || jsonData.token);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"admin@carvajalfit.com\",\n  \"password\": \"tu_password_aqui\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "login"
+                            ]
+                        },
+                        "description": "Login como administrador para obtener el token JWT"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Mercado Pago Search",
+            "item": [
+                {
+                    "name": "Buscar todas las suscripciones",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "description": "Token JWT del admin"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/subscriptions/mercadopago-all",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "subscriptions",
+                                "mercadopago-all"
+                            ]
+                        },
+                        "description": "Obtiene todas las suscripciones directamente desde Mercado Pago"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Buscar suscripciones por estado",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "description": "Token JWT del admin"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/subscriptions/mercadopago-all?status=authorized",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "subscriptions",
+                                "mercadopago-all"
+                            ],
+                            "query": [
+                                {
+                                    "key": "status",
+                                    "value": "authorized",
+                                    "description": "authorized, paused, cancelled"
+                                }
+                            ]
+                        },
+                        "description": "Filtra las suscripciones por estado (ej. authorized)"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Buscar por email de pagador",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "description": "Token JWT del admin"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/subscriptions/mercadopago-all?payer_email=usuario@example.com",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "subscriptions",
+                                "mercadopago-all"
+                            ],
+                            "query": [
+                                {
+                                    "key": "payer_email",
+                                    "value": "usuario@example.com"
+                                }
+                            ]
+                        },
+                        "description": "Busca suscripciones de un usuario específico por su email"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Paginación - Siguiente página",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{jwt_token}}",
+                                "description": "Token JWT del admin"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/subscriptions/mercadopago-all?limit=30&offset=30",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "subscriptions",
+                                "mercadopago-all"
+                            ],
+                            "query": [
+                                {
+                                    "key": "limit",
+                                    "value": "30"
+                                },
+                                {
+                                    "key": "offset",
+                                    "value": "30"
+                                }
+                            ]
+                        },
+                        "description": "Ejemplo de paginación usando limit y offset"
+                    },
+                    "response": []
+                }
+            ]
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:3001/v1",
+            "type": "string"
+        },
+        {
+            "key": "jwt_token",
+            "value": "",
+            "type": "string"
+        }
+    ]
+}

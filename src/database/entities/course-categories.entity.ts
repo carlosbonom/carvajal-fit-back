@@ -29,6 +29,9 @@ export class CourseCategory {
     @Column({ type: 'text', nullable: true })
     description: string | null;
 
+    @Column({ type: 'text', nullable: true, name: 'cover_url' })
+    coverUrl: string | null;
+
     @Column({ type: 'integer', default: 0, nullable: false, name: 'sort_order' })
     sortOrder: number;
 

@@ -22,5 +22,6 @@ import { User } from '../database/entities/users.entity';
     ],
     controllers: [MarketController],
     providers: [MarketService],
+    exports: [MarketService],
 })
 export class MarketModule { }

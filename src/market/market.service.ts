@@ -64,6 +64,157 @@ export class MarketService {
         };
     }
 
+    async handleMercadoPagoPayment(paymentId: string) {
+        console.log(`[MarketService] Handling MP payment: ${paymentId}`);
+
+        // We need to find the order first to know which creator's token to use
+        // But we don't have the external_reference yet.
+        // Try with default token first to find the payment details
+        const defaultAccessToken = this.configService.get<string>('MERCADOPAGO_ACCESS_TOKEN');
+        let paymentDetails;
+
+        try {
+            paymentDetails = await this.mercadoPagoService.getPayment(paymentId, defaultAccessToken);
+        } catch (error) {
+            console.warn(`[MarketService] Could not fetch payment ${paymentId} with default token. Searching in DB by transactionId...`);
+        }
+
+        let order;
+        if (paymentDetails?.external_reference) {
+            order = await this.ordersRepository.findOne({
+                where: { id: paymentDetails.external_reference },
+                relations: ['user']
+            });
+        }
+
+        // Fallback: search by transactionId if external_reference fetch failed or order not found
+        if (!order) {
+            order = await this.ordersRepository.findOne({
+                where: { transactionId: paymentId },
+                relations: ['user']
+            });
+        }
+
+        if (!order) {
+            console.error(`[MarketService] Order not found for MP payment ${paymentId}`);
+            return;
+        }
+
+        // If we found the order, we can get the correct credentials and re-fetch if needed
+        const creatorSlug = order.metadata?.creatorSlug;
+        if (creatorSlug) {
+            const credentials = this.getCreatorCredentials(creatorSlug).mercadopago;
+            if (credentials.accessToken && credentials.accessToken !== defaultAccessToken) {
+                // Re-fetch with correct token to be sure we have the latest status
+                paymentDetails = await this.mercadoPagoService.getPayment(paymentId, credentials.accessToken);
+            }
+        }
+
+        if (!paymentDetails) {
+            console.error(`[MarketService] Could not retrieve payment details for ${paymentId}`);
+            return;
+        }
+
+        // Re-use logic from validateMercadoPagoTransaction
+        if (paymentDetails.status === 'approved' && order.status !== OrderStatus.COMPLETED) {
+            console.log(`[MarketService] Payment ${paymentId} approved. Completing order ${order.orderNumber}`);
+
+            order.status = OrderStatus.COMPLETED;
+            order.paidAt = new Date();
+            order.transactionId = paymentId;
+            await this.ordersRepository.save(order);
+
+            // Send confirmation emails (re-using existing logic)
+            // Note: This logic is a bit long, in a real refactor I'd move this to a private method
+            // but for now I'll keep it simple to ensure it works exactly like before.
+            try {
+                const items = order.metadata?.items as { productId: string; quantity: number }[] || [];
+                const productsInfo: { name: string; quantity: number; price: number, isDigital: boolean, link?: string }[] = [];
+
+                for (const item of items) {
+                    const product = await this.productsRepository.findOne({ where: { id: item.productId }, relations: ['prices'] });
+                    if (product) {
+                        const price = product.prices.find(p => p.currency === 'CLP')?.amount || 0;
+                        const isDigital = ['pdf', 'digital_file', 'video', 'ebook', 'template'].includes(product.productType);
+                        const productLink = product.fileUrl || (product.metadata as any)?.link;
+
+                        productsInfo.push({
+                            name: product.name,
+                            quantity: item.quantity,
+                            price: Number(price),
+                            isDigital: isDigital,
+                            link: productLink
+                        });
+                    }
+                }
+
+                // Generar Boleta Lioren
+                let boletaAttachments: any[] = [];
+                try {
+                    const userRut = order.metadata?.userRut || this.configService.get<string>('LIOREN_DEFAULT_RUT') || '111111111';
+
+                    const boletaResult = await this.liorenService.generarBoletaCompra(
+                        {
+                            rut: userRut,
+                            nombre: order.user?.name || 'Cliente',
+                            email: order.billingEmail,
+                            comuna: order.metadata?.comuna || 1,
+                            ciudad: order.metadata?.ciudad || 1,
+                        },
+                        productsInfo.map(p => ({
+                            nombre: p.name,
+                            cantidad: p.quantity,
+                            precio: p.price,
+                            exento: p.isDigital
+                        })),
+                        {
+                            fechaPago: order.paidAt || new Date(),
+                            referencia: order.orderNumber,
+                        }
+                    );
+
+                    if (boletaResult && boletaResult.pdf) {
+                        boletaAttachments.push({
+                            filename: `boleta_${order.orderNumber}.pdf`,
+                            content: boletaResult.pdf,
+                        });
+                    }
+                } catch (liorenError) {
+                    console.error("Error generating Lioren boleta for market order (MP Webhook):", liorenError);
+                }
+
+                // Enviar correos
+                for (const p of productsInfo) {
+                    if (p.link) {
+                        await this.marketingService.sendDigitalProductEmail(
+                            order.billingEmail,
+                            order.user?.name || 'Cliente',
+                            p.name,
+                            p.link,
+                            order.orderNumber,
+                            boletaAttachments
+                        );
+                    }
+                }
+
+                await this.marketingService.sendPurchaseConfirmationEmail(
+                    order.billingEmail,
+                    order.user?.name || 'Cliente',
+                    order.orderNumber,
+                    productsInfo.map(p => ({ name: p.name, quantity: p.quantity, price: p.price })),
+                    Number(order.total),
+                    boletaAttachments
+                );
+
+            } catch (error) {
+                console.error("Error processing emails after MP Webhook success:", error);
+            }
+        } else if (['rejected', 'cancelled'].includes(paymentDetails.status)) {
+            order.status = OrderStatus.FAILED;
+            await this.ordersRepository.save(order);
+        }
+    }
+
     private async getOrCreateUser(user: User | undefined, guestDetails?: { name: string; email: string }) {
         if (user) return user;
 
