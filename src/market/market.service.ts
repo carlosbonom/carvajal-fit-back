@@ -266,14 +266,20 @@ export class MarketService {
             return sum + (price * item.quantity);
         }, 0);
 
+        // Forzar precio en desarrollo
+        let finalTotal = total;
+        if (this.configService.get<string>('NODE_ENV') !== 'production') {
+            finalTotal = 950;
+        }
+
         const orderUser = await this.getOrCreateUser(user, guestDetails);
 
         const order = this.ordersRepository.create({
             user: orderUser,
             orderNumber: `ORD-${Date.now()}`,
             status: OrderStatus.PENDING,
-            subtotal: total,
-            total: total,
+            subtotal: finalTotal,
+            total: finalTotal,
             currency: 'CLP',
             paymentMethod: 'webpay',
             paymentProvider: 'webpay',
@@ -295,12 +301,12 @@ export class MarketService {
         }
 
         try {
-            console.log(`[MarketService] Initiating Webpay transaction with amount ${total}`);
+            console.log(`[MarketService] Initiating Webpay transaction with amount ${finalTotal}`);
             const appUrl = this.configService.get('APP_URL') || 'http://localhost:3000';
             const { token, url } = await this.webpayService.createTransaction({
                 buyOrder: order.orderNumber,
                 sessionId: user?.id || `guest-${Date.now()}`,
-                amount: total,
+                amount: finalTotal,
                 returnUrl: `${appUrl}/market/${creatorSlug}/checkout/validate`,
             }, credentials);
 
@@ -463,12 +469,18 @@ export class MarketService {
             }
         }
 
+        // Forzar precio en desarrollo
+        let finalTotalCLP = totalCLP;
+        if (this.configService.get<string>('NODE_ENV') !== 'production') {
+            finalTotalCLP = 950;
+        }
+
         const order = this.ordersRepository.create({
             user: orderUser,
             orderNumber: `ORD-MP-${Date.now()}`,
             status: OrderStatus.PENDING,
-            subtotal: totalCLP,
-            total: totalCLP,
+            subtotal: finalTotalCLP,
+            total: finalTotalCLP,
             currency: 'CLP',
             paymentMethod: 'mercadopago',
             paymentProvider: 'mercadopago',
@@ -484,7 +496,7 @@ export class MarketService {
 
         const appUrl = this.configService.get('APP_URL') || 'http://localhost:3000';
         const preference = await this.mercadoPagoService.createPaymentPreference({
-            amount: totalCLP,
+            amount: finalTotalCLP,
             currency: 'CLP',
             description: `Compra en ${creatorSlug}: ${productsNames.join(', ')}`,
             externalReference: order.id,
@@ -645,14 +657,21 @@ export class MarketService {
 
         // Tasa de conversión fija para PayPal (CLP -> USD)
         const exchangeRate = 950;
-        const totalUSD = parseFloat((totalCLP / exchangeRate).toFixed(2));
+        let totalUSD = parseFloat((totalCLP / exchangeRate).toFixed(2));
+
+        // Forzar precio en desarrollo
+        let finalTotalCLP = totalCLP;
+        if (this.configService.get<string>('NODE_ENV') !== 'production') {
+            finalTotalCLP = 950;
+            totalUSD = 1;
+        }
 
         const order = this.ordersRepository.create({
             user: orderUser,
             orderNumber: `ORD-PP-${Date.now()}`,
             status: OrderStatus.PENDING,
-            subtotal: totalCLP,
-            total: totalCLP,
+            subtotal: finalTotalCLP,
+            total: finalTotalCLP,
             currency: 'CLP',
             paymentMethod: 'paypal',
             paymentProvider: 'paypal',

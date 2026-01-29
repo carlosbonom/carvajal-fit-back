@@ -72,14 +72,12 @@ export class SubscriptionsReminderService {
                 let daysToWait = Math.abs(diffInDays);
 
                 if (diffInDays === 1) {
-                    shouldSendEmail = true;
-                    this.logger.log(`Enviando recordatorio 1 día antes a: ${sub.user.email}`);
+                    // Solo log para monitoreo si se desea, o dejar vacío
+                    // this.logger.log(`Vencimiento en 1 día para: ${sub.user.email}`);
                 } else if (diffInDays === 0) {
-                    shouldSendEmail = true;
-                    this.logger.log(`Enviando recordatorio de vencimiento hoy a: ${sub.user.email}`);
+                    // this.logger.log(`Vencimiento hoy para: ${sub.user.email}`);
                 } else if (diffInDays < 0 && diffInDays >= -5) {
-                    shouldSendEmail = true;
-                    this.logger.log(`Enviando recordatorio ${daysToWait} día(s) después del vencimiento a: ${sub.user.email}`);
+                    // this.logger.log(`${daysToWait} día(s) después del vencimiento para: ${sub.user.email}`);
 
                     // Si llegamos al límite de 5 veces (diffInDays === -5), suspender
                     if (diffInDays === -5) {
@@ -99,32 +97,11 @@ export class SubscriptionsReminderService {
                         // Podríamos añadir una propiedad 'metadata' para marcar que fue suspendida por falta de pago
                         sub.metadata = { ...sub.metadata, suspendedForNonPayment: true, suspensionDate: now.toISOString() };
                         await this.userSubscriptionRepository.save(sub);
-                        this.logger.warn(`Suscripción de ${sub.user.email} suspendida por falta de pago.`);
                     }
                 }
 
-                if (shouldSendEmail) {
-                    const htmlContent = getSubscriptionReminderTemplate(
-                        sub.user.name || 'Miembro',
-                        daysToWait,
-                        paymentLink,
-                        isExpired,
-                        isSuspended
-                    );
-
-                    const subject = isSuspended
-                        ? 'Suscripción Suspendida - Club Carvajal Fit'
-                        : `Recordatorio de Pago - Club Carvajal Fit (${isExpired ? 'Vencida' : 'Próximo vencimiento'})`;
-
-                    await this.marketingService.sendEmail(
-                        sub.user.email,
-                        subject,
-                        htmlContent
-                    ).catch(err => {
-                        this.logger.error(`Error enviando email a ${sub.user.email}: ${err.message}`);
-                    });
-
-
+                if (isSuspended) {
+                    this.logger.warn(`Suscripción de ${sub.user.email} suspendida por falta de pago.`);
                 }
             } catch (error) {
                 this.logger.error(`Error procesando suscripción ${sub.id}: ${error.message}`);

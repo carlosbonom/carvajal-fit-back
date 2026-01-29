@@ -448,7 +448,7 @@ export class MercadoPagoService {
   }
 
   private getValidBackUrl(backUrl?: string): string {
-    const defaultUrl = `${this.configService.get<string>('APP_URL', 'https://carvajalfit.com')}/subscriptions/callback`;
+    const defaultUrl = `${this.configService.get<string>('APP_URL', 'https://carvajalfit.com')}/checkout/success`;
 
     if (!backUrl) {
       return defaultUrl;

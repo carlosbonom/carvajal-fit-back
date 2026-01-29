@@ -33,6 +33,7 @@ import { CreatePayPalOrderDto, ValidatePayPalPaymentDto } from './dto/create-pay
 import { VerifyPayPalCaptureDto } from './dto/verify-paypal-capture.dto';
 import { CreateMercadoPagoCheckoutDto, ValidateMercadoPagoPaymentDto } from './dto/create-mercadopago-checkout.dto';
 import { MigrateSubscribersDto } from './dto/migrate-subscribers.dto';
+import { UpdateMemberDto } from './dto/update-member.dto';
 
 import { SubscriptionsReminderService } from './subscriptions-reminder.service';
 
@@ -173,6 +174,16 @@ export class SubscriptionsController {
   @UseGuards(JwtAuthGuard, AdminGuard)
   async getMembers(@Query() query: GetMembersQueryDto): Promise<MembersResponseDto> {
     return this.subscriptionsService.getMembers(query);
+  }
+
+  @Put('members/:id')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @HttpCode(HttpStatus.OK)
+  async updateMember(
+    @Param('id') id: string,
+    @Body() updateDto: UpdateMemberDto,
+  ) {
+    return this.subscriptionsService.updateMember(id, updateDto);
   }
 
   @Post('webpay/create')
@@ -385,6 +396,60 @@ export class SubscriptionsController {
     const result = await this.subscriptionsService.validateMercadoPagoPayment(
       validateDto.paymentId,
       subscriptionId,
+    );
+
+    // Convertir subscription a DTO si existe
+    let subscriptionDto: UserSubscriptionDto | undefined;
+    if (result.subscription) {
+      const sub = result.subscription;
+      subscriptionDto = {
+        id: sub.id,
+        status: sub.status,
+        startedAt: sub.startedAt,
+        currentPeriodStart: sub.currentPeriodStart,
+        currentPeriodEnd: sub.currentPeriodEnd,
+        cancelledAt: sub.cancelledAt,
+        autoRenew: sub.autoRenew,
+        cancellationReason: sub.cancellationReason,
+        plan: {
+          id: sub.plan.id,
+          name: sub.plan.name,
+          slug: sub.plan.slug,
+          description: sub.plan.description,
+          features: sub.plan.features || [],
+          prices: [],
+        },
+        billingCycle: {
+          id: sub.billingCycle.id,
+          name: sub.billingCycle.name,
+          slug: sub.billingCycle.slug,
+          intervalType: sub.billingCycle.intervalType,
+          intervalCount: sub.billingCycle.intervalCount,
+        },
+        createdAt: sub.createdAt,
+        updatedAt: sub.updatedAt,
+      };
+    }
+
+    return {
+      success: result.success,
+      subscription: subscriptionDto,
+      redirectUrl: result.redirectUrl,
+    };
+  }
+
+  @Post('mercadopago/validate-subscription')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  async validateMercadoPagoSubscription(
+    @Body() body: { preapprovalId: string },
+  ): Promise<{
+    success: boolean;
+    subscription?: UserSubscriptionDto;
+    redirectUrl?: string;
+  }> {
+    const result = await this.subscriptionsService.validateMercadoPagoSubscription(
+      body.preapprovalId,
     );
 
     // Convertir subscription a DTO si existe

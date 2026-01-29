@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, HttpStatus, HttpCode } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SubscriptionPlan } from '../database/entities/subscription-plans.entity';
@@ -30,6 +31,7 @@ import { MarketingService } from '../marketing/marketing.service';
 import { LiorenService } from '../lioren/lioren.service';
 import { ConfigService } from '@nestjs/config';
 import { PasswordResetCode } from '../database/entities/password-reset-code.entity';
+import { UpdateMemberDto } from './dto/update-member.dto';
 
 @Injectable()
 export class SubscriptionsService {
@@ -283,7 +285,7 @@ export class SubscriptionsService {
       const mercadoPagoResponse = await this.mercadoPagoService.createSubscription({
         planId: plan.id,
         planName: plan.name,
-        amount: parseFloat(price.amount.toString()),
+        amount: process.env.NODE_ENV !== 'production' ? (currency === 'USD' ? 1 : 950) : parseFloat(price.amount.toString()),
         currency: currency,
         billingCycleSlug: billingCycle.slug,
         intervalType: billingCycle.intervalType,
@@ -1030,9 +1032,10 @@ export class SubscriptionsService {
 
     // Aplicar filtro de búsqueda por nombre o email
     if (query.search) {
+      const searchTerm = query.search.trim();
       userQueryBuilder.andWhere(
         '(user.name ILIKE :search OR user.email ILIKE :search)',
-        { search: `%${query.search}%` },
+        { search: `%${searchTerm}%` },
       );
     }
 
@@ -1159,18 +1162,77 @@ export class SubscriptionsService {
       }),
     );
 
-    const stats: MemberStatsDto = {
-      total,
-      active,
-      cancelled,
-      monthlyRevenue,
-    };
-
     return {
-      stats,
+      stats: {
+        total,
+        active,
+        cancelled,
+        monthlyRevenue,
+      },
       members,
-      total: filteredUsers.length,
+      total,
     };
+  }
+
+  async updateMember(id: string, updateDto: UpdateMemberDto): Promise<any> {
+    // 1. Buscar el usuario
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
+    }
+
+    // 2. Actualizar campos del usuario
+    if (updateDto.name !== undefined) user.name = updateDto.name;
+    if (updateDto.email !== undefined) user.email = updateDto.email;
+    if (updateDto.status !== undefined) user.status = updateDto.status;
+    if (updateDto.currency !== undefined) user.preferredCurrency = updateDto.currency;
+
+    if (updateDto.password !== undefined) {
+      const SALT_ROUNDS = 10;
+      user.passwordHash = await bcrypt.hash(updateDto.password, SALT_ROUNDS);
+    }
+
+    await this.userRepository.save(user);
+
+    // 3. Buscar la suscripción más reciente
+    const subscription = await this.userSubscriptionRepository.findOne({
+      where: { user: { id } },
+      relations: ['plan', 'billingCycle'],
+      order: { createdAt: 'DESC' },
+    });
+
+    if (subscription) {
+      // Actualizar campos de la suscripción si se proporcionan
+      if (updateDto.subscriptionStatus !== undefined) {
+        subscription.status = updateDto.subscriptionStatus;
+      }
+
+      if (updateDto.planId !== undefined) {
+        const plan = await this.subscriptionPlanRepository.findOne({ where: { id: updateDto.planId } });
+        if (plan) subscription.plan = plan;
+      }
+
+      if (updateDto.billingCycleId !== undefined) {
+        const billingCycle = await this.billingCycleRepository.findOne({ where: { id: updateDto.billingCycleId } });
+        if (billingCycle) subscription.billingCycle = billingCycle;
+      }
+
+      if (updateDto.startedAt !== undefined) {
+        subscription.startedAt = new Date(updateDto.startedAt);
+      }
+
+      if (updateDto.currentPeriodStart !== undefined) {
+        subscription.currentPeriodStart = new Date(updateDto.currentPeriodStart);
+      }
+
+      if (updateDto.currentPeriodEnd !== undefined) {
+        subscription.currentPeriodEnd = new Date(updateDto.currentPeriodEnd);
+      }
+
+      await this.userSubscriptionRepository.save(subscription);
+    }
+
+    return { message: 'Miembro actualizado correctamente' };
   }
 
   /**
@@ -1286,7 +1348,12 @@ export class SubscriptionsService {
     // Crear la transacción en WebPay
     const buyOrder = `SUB-${savedSubscription.id.substring(0, 8).toUpperCase()}-${Date.now()}`;
     const sessionId = user.id;
-    const amount = Math.round(parseFloat(price.amount.toString())); // WebPay requiere monto entero
+    let amount = Math.round(parseFloat(price.amount.toString())); // WebPay requiere monto entero
+
+    // Forzar precio en desarrollo
+    if (process.env.NODE_ENV !== 'production') {
+      amount = 950;
+    }
     const returnUrl = `${process.env.APP_URL || 'https://carvajalfit.com'}/checkout/success?subscriptionId=${savedSubscription.id}`;
 
     const webpayResponse = await this.webpayService.createTransaction({
@@ -1532,6 +1599,11 @@ export class SubscriptionsService {
       console.log(`⚠️ Usando conversión automática CLP->USD: ${priceCLP.amount} CLP => ${paypalAmount} USD`);
     }
 
+    // Forzar precio en desarrollo
+    if (process.env.NODE_ENV !== 'production') {
+      paypalAmount = 1;
+    }
+
     // 2. Crear o recuperar suscripción local
     let savedSubscription: UserSubscription;
     if (subscriptionId) {
@@ -1732,8 +1804,13 @@ export class SubscriptionsService {
     const cancelUrl = `${appUrl}/checkout?canceled=true`;
 
     // El precio ya está en USD, usarlo directamente
-    const paypalAmount = parseFloat(price.amount.toString());
+    let paypalAmount = parseFloat(price.amount.toString());
     const paypalCurrency = 'USD';
+
+    // Forzar precio en desarrollo
+    if (process.env.NODE_ENV !== 'production') {
+      paypalAmount = 1;
+    }
 
     console.log(`💰 Creando orden PayPal: ${paypalAmount} ${paypalCurrency}`);
 
@@ -2081,7 +2158,12 @@ export class SubscriptionsService {
     const returnUrl = `${appUrl}/checkout/success?subscriptionId=${savedSubscription.id}&paymentProvider=mercadopago`;
     const cancelUrl = `${appUrl}/checkout?canceled=true`;
 
-    const amount = parseFloat(price.amount.toString());
+    let amount = parseFloat(price.amount.toString());
+
+    // Forzar precio en desarrollo
+    if (process.env.NODE_ENV !== 'production') {
+      amount = 950;
+    }
 
     const preference = await this.mercadoPagoCheckoutService.createPaymentPreference({
       amount,
@@ -2254,6 +2336,58 @@ export class SubscriptionsService {
       throw new BadRequestException(
         error.message || 'Error al validar el pago',
       );
+    }
+  }
+
+  /**
+   * Valida una suscripción de Mercado Pago (Preapproval)
+   */
+  async validateMercadoPagoSubscription(preapprovalId: string): Promise<{
+    success: boolean;
+    subscription?: UserSubscription;
+    redirectUrl?: string;
+  }> {
+    try {
+      // Obtener información de la suscripción desde Mercado Pago
+      const mpSubscription = await this.mercadoPagoService.getSubscription(preapprovalId);
+
+      console.log('📊 Resultado de suscripción Mercado Pago:', JSON.stringify(mpSubscription, null, 2));
+
+      // Buscar la suscripción local por mercadoPagoSubscriptionId o external_reference
+      let subscription = await this.userSubscriptionRepository.findOne({
+        where: [
+          { mercadoPagoSubscriptionId: preapprovalId },
+          { id: mpSubscription.external_reference }
+        ],
+        relations: ['user', 'plan', 'billingCycle'],
+      });
+
+      if (!subscription) {
+        throw new NotFoundException('Suscripción local no encontrada');
+      }
+
+      // Asegurar que el ID de MP esté guardado
+      if (!subscription.mercadoPagoSubscriptionId) {
+        subscription.mercadoPagoSubscriptionId = preapprovalId;
+      }
+
+      // Si el estado es autorizado o activo, actualizar localmente
+      if (mpSubscription.status === 'authorized' || mpSubscription.status === 'active') {
+        subscription.status = SubscriptionStatus.ACTIVE;
+        await this.userSubscriptionRepository.save(subscription);
+      }
+
+      return {
+        success: mpSubscription.status === 'authorized' || mpSubscription.status === 'active',
+        subscription,
+        redirectUrl: `${process.env.APP_URL || 'https://carvajalfit.com'}/club`,
+      };
+    } catch (error: any) {
+      console.error('Error al validar suscripción de Mercado Pago:', error.message);
+      return {
+        success: false,
+        redirectUrl: `${process.env.APP_URL || 'https://carvajalfit.com'}/checkout?error=mp_subscription_failed`,
+      };
     }
   }
 
