@@ -15,10 +15,11 @@ export class MarketController {
         @Param('creatorSlug') creatorSlug: string,
         @Body() body: {
             items: { productId: string; quantity: number }[],
-            guestDetails?: { name: string; email: string }
+            guestDetails?: { name: string; email: string },
+            origin?: string
         }
     ) {
-        return this.marketService.createWebpayTransaction(user, body.items, creatorSlug, body.guestDetails);
+        return this.marketService.createWebpayTransaction(user, body.items, creatorSlug, body.guestDetails, body.origin);
     }
 
     @Public()
@@ -28,10 +29,11 @@ export class MarketController {
         @Param('creatorSlug') creatorSlug: string,
         @Body() body: {
             items: { productId: string; quantity: number }[],
-            guestDetails?: { name: string; email: string }
+            guestDetails?: { name: string; email: string },
+            origin?: string
         }
     ) {
-        return this.marketService.createMercadoPagoCheckout(user, body.items, creatorSlug, body.guestDetails);
+        return this.marketService.createMercadoPagoCheckout(user, body.items, creatorSlug, body.guestDetails, body.origin);
     }
 
     @Public()
@@ -41,10 +43,11 @@ export class MarketController {
         @Param('creatorSlug') creatorSlug: string,
         @Body() body: {
             items: { productId: string; quantity: number }[],
-            guestDetails?: { name: string; email: string }
+            guestDetails?: { name: string; email: string },
+            origin?: string
         }
     ) {
-        return this.marketService.createPayPalOrder(user, body.items, creatorSlug, body.guestDetails);
+        return this.marketService.createPayPalOrder(user, body.items, creatorSlug, body.guestDetails, body.origin);
     }
 
     @Public()

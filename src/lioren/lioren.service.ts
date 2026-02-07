@@ -108,6 +108,11 @@ export class LiorenService {
       );
 
       this.logger.log(`Documento emitido exitosamente. Folio: ${response.data.folio}, Tipo: ${boletaData.tipodoc}`);
+      if (response.data.pdf) {
+        this.logger.log(`PDF recibido en la respuesta (Base64 length: ${response.data.pdf.length})`);
+      } else {
+        this.logger.warn(`No se recibió PDF en la respuesta inicial de emisión.`);
+      }
 
       return {
         ...response.data,
@@ -150,9 +155,11 @@ export class LiorenService {
       });
 
       if (response.data.pdf) {
+        this.logger.log(`PDF obtenido exitosamente para Folio: ${folio}, Tipo: ${tipodoc} (Base64 length: ${response.data.pdf.length})`);
         return Buffer.from(response.data.pdf, 'base64');
       }
 
+      this.logger.warn(`No se recibió el PDF del documento para Folio: ${folio}, Tipo: ${tipodoc}`);
       throw new BadRequestException('No se recibió el PDF del documento');
     } catch (error: any) {
       this.logger.error('Error al obtener PDF:', error.response?.data || error.message);

@@ -64,6 +64,109 @@ export class MarketService {
         };
     }
 
+    private async completeOrderAndSendEmails(order: Order, transactionId: string) {
+        if (order.status === OrderStatus.COMPLETED) {
+            console.log(`[MarketService] Order ${order.orderNumber} already completed. Skipping email sending.`);
+            return;
+        }
+
+        console.log(`[MarketService] Completing order ${order.orderNumber} with transaction ${transactionId}`);
+
+        order.status = OrderStatus.COMPLETED;
+        order.paidAt = new Date();
+        order.transactionId = transactionId;
+        await this.ordersRepository.save(order);
+
+        // Send confirmation emails
+        try {
+            const items = order.metadata?.items as { productId: string; quantity: number }[] || [];
+            const productsInfo: { name: string; quantity: number; price: number, isDigital: boolean, link?: string }[] = [];
+
+            for (const item of items) {
+                const product = await this.productsRepository.findOne({ where: { id: item.productId }, relations: ['prices'] });
+                if (product) {
+                    const price = product.prices.find(p => p.currency === 'CLP')?.amount || 0;
+                    const isDigital = ['pdf', 'digital_file', 'video', 'ebook', 'template'].includes(product.productType);
+                    const productLink = product.fileUrl || (product.metadata as any)?.link;
+
+                    productsInfo.push({
+                        name: product.name,
+                        quantity: item.quantity,
+                        price: Number(price),
+                        isDigital: isDigital,
+                        link: productLink
+                    });
+                }
+            }
+
+            // Generar Boleta Lioren
+            let boletaAttachments: any[] = [];
+            try {
+                const userRut = order.metadata?.userRut || this.configService.get<string>('LIOREN_DEFAULT_RUT') || '111111111';
+                console.log(`[MarketService] Generating Lioren boleta for order ${order.orderNumber}. RUT: ${userRut}`);
+
+                const boletaResult = await this.liorenService.generarBoletaCompra(
+                    {
+                        rut: userRut,
+                        nombre: order.user?.name || 'Cliente',
+                        email: order.billingEmail,
+                        comuna: order.metadata?.comuna || 1,
+                        ciudad: order.metadata?.ciudad || 1,
+                    },
+                    productsInfo.map(p => ({
+                        nombre: p.name,
+                        cantidad: p.quantity,
+                        precio: p.price,
+                        exento: p.isDigital
+                    })),
+                    {
+                        fechaPago: order.paidAt || new Date(),
+                        referencia: order.orderNumber,
+                    }
+                );
+
+                if (boletaResult && boletaResult.pdf) {
+                    console.log(`[MarketService] Lioren boleta generated successfully. PDF size: ${boletaResult.pdf.length} bytes`);
+                    boletaAttachments.push({
+                        filename: `boleta_${order.orderNumber}.pdf`,
+                        content: boletaResult.pdf,
+                    });
+                } else {
+                    console.warn(`[MarketService] Lioren boleta generated but PDF is missing.`, boletaResult);
+                }
+            } catch (liorenError) {
+                console.error(`[MarketService] Error generating Lioren boleta for order ${order.orderNumber}:`, liorenError);
+            }
+
+            // Enviar correos de productos digitales
+            for (const p of productsInfo) {
+                if (p.link) {
+                    await this.marketingService.sendDigitalProductEmail(
+                        order.billingEmail,
+                        order.user?.name || 'Cliente',
+                        p.name,
+                        p.link,
+                        order.orderNumber,
+                        boletaAttachments
+                    );
+                }
+            }
+
+            // Enviar confirmación de compra general
+            await this.marketingService.sendPurchaseConfirmationEmail(
+                order.billingEmail,
+                order.user?.name || 'Cliente',
+                order.orderNumber,
+                productsInfo.map(p => ({ name: p.name, quantity: p.quantity, price: p.price })),
+                Number(order.total),
+                boletaAttachments
+            );
+
+        } catch (error) {
+            console.error(`[MarketService] Error processing emails for order ${order.orderNumber}:`, error);
+        }
+    }
+
     async handleMercadoPagoPayment(paymentId: string) {
         console.log(`[MarketService] Handling MP payment: ${paymentId}`);
 
@@ -116,99 +219,8 @@ export class MarketService {
         }
 
         // Re-use logic from validateMercadoPagoTransaction
-        if (paymentDetails.status === 'approved' && order.status !== OrderStatus.COMPLETED) {
-            console.log(`[MarketService] Payment ${paymentId} approved. Completing order ${order.orderNumber}`);
-
-            order.status = OrderStatus.COMPLETED;
-            order.paidAt = new Date();
-            order.transactionId = paymentId;
-            await this.ordersRepository.save(order);
-
-            // Send confirmation emails (re-using existing logic)
-            // Note: This logic is a bit long, in a real refactor I'd move this to a private method
-            // but for now I'll keep it simple to ensure it works exactly like before.
-            try {
-                const items = order.metadata?.items as { productId: string; quantity: number }[] || [];
-                const productsInfo: { name: string; quantity: number; price: number, isDigital: boolean, link?: string }[] = [];
-
-                for (const item of items) {
-                    const product = await this.productsRepository.findOne({ where: { id: item.productId }, relations: ['prices'] });
-                    if (product) {
-                        const price = product.prices.find(p => p.currency === 'CLP')?.amount || 0;
-                        const isDigital = ['pdf', 'digital_file', 'video', 'ebook', 'template'].includes(product.productType);
-                        const productLink = product.fileUrl || (product.metadata as any)?.link;
-
-                        productsInfo.push({
-                            name: product.name,
-                            quantity: item.quantity,
-                            price: Number(price),
-                            isDigital: isDigital,
-                            link: productLink
-                        });
-                    }
-                }
-
-                // Generar Boleta Lioren
-                let boletaAttachments: any[] = [];
-                try {
-                    const userRut = order.metadata?.userRut || this.configService.get<string>('LIOREN_DEFAULT_RUT') || '111111111';
-
-                    const boletaResult = await this.liorenService.generarBoletaCompra(
-                        {
-                            rut: userRut,
-                            nombre: order.user?.name || 'Cliente',
-                            email: order.billingEmail,
-                            comuna: order.metadata?.comuna || 1,
-                            ciudad: order.metadata?.ciudad || 1,
-                        },
-                        productsInfo.map(p => ({
-                            nombre: p.name,
-                            cantidad: p.quantity,
-                            precio: p.price,
-                            exento: p.isDigital
-                        })),
-                        {
-                            fechaPago: order.paidAt || new Date(),
-                            referencia: order.orderNumber,
-                        }
-                    );
-
-                    if (boletaResult && boletaResult.pdf) {
-                        boletaAttachments.push({
-                            filename: `boleta_${order.orderNumber}.pdf`,
-                            content: boletaResult.pdf,
-                        });
-                    }
-                } catch (liorenError) {
-                    console.error("Error generating Lioren boleta for market order (MP Webhook):", liorenError);
-                }
-
-                // Enviar correos
-                for (const p of productsInfo) {
-                    if (p.link) {
-                        await this.marketingService.sendDigitalProductEmail(
-                            order.billingEmail,
-                            order.user?.name || 'Cliente',
-                            p.name,
-                            p.link,
-                            order.orderNumber,
-                            boletaAttachments
-                        );
-                    }
-                }
-
-                await this.marketingService.sendPurchaseConfirmationEmail(
-                    order.billingEmail,
-                    order.user?.name || 'Cliente',
-                    order.orderNumber,
-                    productsInfo.map(p => ({ name: p.name, quantity: p.quantity, price: p.price })),
-                    Number(order.total),
-                    boletaAttachments
-                );
-
-            } catch (error) {
-                console.error("Error processing emails after MP Webhook success:", error);
-            }
+        if (paymentDetails.status === 'approved') {
+            await this.completeOrderAndSendEmails(order, paymentId);
         } else if (['rejected', 'cancelled'].includes(paymentDetails.status)) {
             order.status = OrderStatus.FAILED;
             await this.ordersRepository.save(order);
@@ -243,7 +255,8 @@ export class MarketService {
         user: User | undefined,
         items: { productId: string; quantity: number }[],
         creatorSlug: string,
-        guestDetails?: { name: string; email: string }
+        guestDetails?: { name: string; email: string },
+        origin?: string
     ) {
         console.log(`[MarketService] createWebpayTransaction params:`, { userId: user?.id, isGuest: !user, items, creatorSlug });
 
@@ -302,12 +315,18 @@ export class MarketService {
 
         try {
             console.log(`[MarketService] Initiating Webpay transaction with amount ${finalTotal}`);
-            const appUrl = this.configService.get('APP_URL') || 'http://localhost:3000';
+            let appUrl = origin || this.configService.get('APP_URL') || 'http://localhost:3000';
+            // Forzar redirección a producción si estamos en localhost (requerimiento del usuario)
+            if (appUrl.includes('localhost')) {
+                appUrl = 'https://carvajalfit.com';
+            }
+            const returnUrl = `${appUrl}/market/${creatorSlug}/checkout/validate`;
+            console.log(`[MarketService] Webpay returnUrl: ${returnUrl}`);
             const { token, url } = await this.webpayService.createTransaction({
                 buyOrder: order.orderNumber,
                 sessionId: user?.id || `guest-${Date.now()}`,
                 amount: finalTotal,
-                returnUrl: `${appUrl}/market/${creatorSlug}/checkout/validate`,
+                returnUrl,
             }, credentials);
 
             console.log(`[MarketService] Webpay transaction created:`, { token, url });
@@ -338,99 +357,7 @@ export class MarketService {
 
         // Validate response code (0 = Authorized)
         if (response.status === 'AUTHORIZED' && response.response_code === 0) {
-            order.status = OrderStatus.COMPLETED;
-            order.paidAt = new Date();
-            order.transactionId = token;
-
-            await this.ordersRepository.save(order);
-
-            // Send confirmation emails
-            try {
-                const items = order.metadata?.items as { productId: string; quantity: number }[] || [];
-                const productsInfo: { name: string; quantity: number; price: number, isDigital: boolean, link?: string }[] = [];
-
-                // Cargar info de productos primero
-                for (const item of items) {
-                    const product = await this.productsRepository.findOne({ where: { id: item.productId }, relations: ['prices'] });
-                    if (product) {
-                        const price = product.prices.find(p => p.currency === 'CLP')?.amount || 0;
-                        const isDigital = ['pdf', 'digital_file', 'video', 'ebook', 'template'].includes(product.productType);
-                        const productLink = product.fileUrl || (product.metadata as any)?.link;
-
-                        productsInfo.push({
-                            name: product.name,
-                            quantity: item.quantity,
-                            price: price,
-                            isDigital: isDigital,
-                            link: productLink
-                        });
-                    }
-                }
-
-                // Generar Boleta Lioren ANTES de enviar emails para poder adjuntarla
-                let boletaAttachments: any[] = [];
-                try {
-                    // El RUT y otros datos podrían estar en order.metadata si se capturaron en el checkout
-                    const userRut = order.metadata?.userRut || this.configService.get<string>('LIOREN_DEFAULT_RUT') || '111111111';
-
-                    const boletaResult = await this.liorenService.generarBoletaCompra(
-                        {
-                            rut: userRut,
-                            nombre: order.user?.name || 'Cliente',
-                            email: order.billingEmail,
-                            comuna: order.metadata?.comuna || 1,
-                            ciudad: order.metadata?.ciudad || 1,
-                        },
-                        productsInfo.map(p => ({
-                            nombre: p.name,
-                            cantidad: p.quantity,
-                            precio: p.price,
-                            exento: p.isDigital
-                        })),
-                        {
-                            fechaPago: order.paidAt || new Date(),
-                            referencia: order.orderNumber,
-                        }
-                    );
-
-                    if (boletaResult && boletaResult.pdf) {
-                        boletaAttachments.push({
-                            filename: `boleta_${order.orderNumber}.pdf`,
-                            content: boletaResult.pdf,
-                        });
-                    }
-                } catch (liorenError) {
-                    console.error("Error generating Lioren boleta for market order:", liorenError);
-                }
-
-                // Enviar correos de productos digitales
-                for (const p of productsInfo) {
-                    if (p.link) {
-                        await this.marketingService.sendDigitalProductEmail(
-                            order.billingEmail,
-                            order.user?.name || 'Cliente',
-                            p.name,
-                            p.link,
-                            order.orderNumber,
-                            boletaAttachments
-                        );
-                    }
-                }
-
-                // Enviar confirmación general
-                await this.marketingService.sendPurchaseConfirmationEmail(
-                    order.billingEmail,
-                    order.user?.name || 'Cliente',
-                    order.orderNumber,
-                    productsInfo.map(p => ({ name: p.name, quantity: p.quantity, price: p.price })),
-                    Number(order.total),
-                    boletaAttachments
-                );
-
-            } catch (emailError) {
-                console.error("Error creating emails:", emailError);
-            }
-
+            await this.completeOrderAndSendEmails(order, token);
         } else {
             order.status = OrderStatus.FAILED;
             await this.ordersRepository.save(order);
@@ -447,7 +374,8 @@ export class MarketService {
         user: User | undefined,
         items: { productId: string; quantity: number }[],
         creatorSlug: string,
-        guestDetails?: { name: string; email: string }
+        guestDetails?: { name: string; email: string },
+        origin?: string
     ) {
         const credentials = this.getCreatorCredentials(creatorSlug).mercadopago;
         if (!credentials.accessToken) throw new BadRequestException(`Configuración de pago no encontrada para ${creatorSlug}`);
@@ -494,13 +422,19 @@ export class MarketService {
 
         await this.ordersRepository.save(order);
 
-        const appUrl = this.configService.get('APP_URL') || 'http://localhost:3000';
+        let appUrl = origin || this.configService.get('APP_URL') || 'http://localhost:3000';
+        // Forzar redirección a producción si estamos en localhost (para habilitar auto_return en MP)
+        if (appUrl.includes('localhost')) {
+            appUrl = 'https://carvajalfit.com';
+        }
+        const returnUrl = `${appUrl}/market/${creatorSlug}/checkout/validate?paymentProvider=mercadopago`;
+        console.log(`[MarketService] Mercado Pago returnUrl: ${returnUrl}`);
         const preference = await this.mercadoPagoService.createPaymentPreference({
             amount: finalTotalCLP,
             currency: 'CLP',
             description: `Compra en ${creatorSlug}: ${productsNames.join(', ')}`,
             externalReference: order.id,
-            returnUrl: `${appUrl}/market/${creatorSlug}/checkout/validate?paymentProvider=mercadopago`,
+            returnUrl,
             cancelUrl: `${appUrl}/market/${creatorSlug}/checkout?canceled=true`,
             payerEmail: orderUser.email,
             payerName: orderUser.name || undefined,
@@ -530,94 +464,7 @@ export class MarketService {
         }
 
         if (paymentDetails.status === 'approved') {
-            order.status = OrderStatus.COMPLETED;
-            order.paidAt = new Date();
-            order.transactionId = paymentId; // Guardar el ID del pago real
-            await this.ordersRepository.save(order);
-
-            // Enviar correos y generar boleta (reutilizando lógica)
-            try {
-                const items = order.metadata?.items as { productId: string; quantity: number }[] || [];
-                const productsInfo: { name: string; quantity: number; price: number, isDigital: boolean, link?: string }[] = [];
-
-                for (const item of items) {
-                    const product = await this.productsRepository.findOne({ where: { id: item.productId }, relations: ['prices'] });
-                    if (product) {
-                        const price = product.prices.find(p => p.currency === 'CLP')?.amount || 0;
-                        const isDigital = ['pdf', 'digital_file', 'video', 'ebook', 'template'].includes(product.productType);
-                        const productLink = product.fileUrl || (product.metadata as any)?.link;
-
-                        productsInfo.push({
-                            name: product.name,
-                            quantity: item.quantity,
-                            price: Number(price),
-                            isDigital: isDigital,
-                            link: productLink
-                        });
-                    }
-                }
-
-                // Generar Boleta Lioren
-                let boletaAttachments: any[] = [];
-                try {
-                    const userRut = order.metadata?.userRut || this.configService.get<string>('LIOREN_DEFAULT_RUT') || '111111111';
-
-                    const boletaResult = await this.liorenService.generarBoletaCompra(
-                        {
-                            rut: userRut,
-                            nombre: order.user?.name || 'Cliente',
-                            email: order.billingEmail,
-                            comuna: order.metadata?.comuna || 1,
-                            ciudad: order.metadata?.ciudad || 1,
-                        },
-                        productsInfo.map(p => ({
-                            nombre: p.name,
-                            cantidad: p.quantity,
-                            precio: p.price,
-                            exento: p.isDigital
-                        })),
-                        {
-                            fechaPago: order.paidAt || new Date(),
-                            referencia: order.orderNumber,
-                        }
-                    );
-
-                    if (boletaResult && boletaResult.pdf) {
-                        boletaAttachments.push({
-                            filename: `boleta_${order.orderNumber}.pdf`,
-                            content: boletaResult.pdf,
-                        });
-                    }
-                } catch (liorenError) {
-                    console.error("Error generating Lioren boleta for market order (MP):", liorenError);
-                }
-
-                // Enviar correos
-                for (const p of productsInfo) {
-                    if (p.link) {
-                        await this.marketingService.sendDigitalProductEmail(
-                            order.billingEmail,
-                            order.user?.name || 'Cliente',
-                            p.name,
-                            p.link,
-                            order.orderNumber,
-                            boletaAttachments
-                        );
-                    }
-                }
-
-                await this.marketingService.sendPurchaseConfirmationEmail(
-                    order.billingEmail,
-                    order.user?.name || 'Cliente',
-                    order.orderNumber,
-                    productsInfo.map(p => ({ name: p.name, quantity: p.quantity, price: p.price })),
-                    Number(order.total),
-                    boletaAttachments
-                );
-
-            } catch (error) {
-                console.error("Error processing emails after Mercado Pago success:", error);
-            }
+            await this.completeOrderAndSendEmails(order, paymentId);
         } else if (paymentDetails.status === 'rejected' || paymentDetails.status === 'cancelled') {
             order.status = OrderStatus.FAILED;
             await this.ordersRepository.save(order);
@@ -634,7 +481,8 @@ export class MarketService {
         user: User | undefined,
         items: { productId: string; quantity: number }[],
         creatorSlug: string,
-        guestDetails?: { name: string; email: string }
+        guestDetails?: { name: string; email: string },
+        origin?: string
     ) {
         const credentials = this.getCreatorCredentials(creatorSlug).paypal;
 
@@ -687,11 +535,17 @@ export class MarketService {
 
         await this.ordersRepository.save(order);
 
-        const appUrl = this.configService.get('APP_URL') || 'http://localhost:3000';
+        let appUrl = origin || this.configService.get('APP_URL') || 'http://localhost:3000';
+        // Forzar redirección a producción si estamos en localhost
+        if (appUrl.includes('localhost')) {
+            appUrl = 'https://carvajalfit.com';
+        }
+        const returnUrl = `${appUrl}/market/${creatorSlug}/checkout/validate?paymentProvider=paypal`;
+        console.log(`[MarketService] PayPal returnUrl: ${returnUrl}`);
         const paypalOrder = await this.payPalService.createOrder({
             amount: totalUSD,
             currency: 'USD',
-            returnUrl: `${appUrl}/market/${creatorSlug}/checkout/validate?paymentProvider=paypal`,
+            returnUrl,
             cancelUrl: `${appUrl}/market/${creatorSlug}/checkout?canceled=true`,
             description: `Compra en ${creatorSlug}: ${productsInfo.join(', ')}`,
             customId: order.id,
@@ -720,93 +574,7 @@ export class MarketService {
         }
 
         if (captureResult.status === 'COMPLETED') {
-            order.status = OrderStatus.COMPLETED;
-            order.paidAt = new Date();
-            await this.ordersRepository.save(order);
-
-            // Enviar correos y generar boleta
-            try {
-                const items = order.metadata?.items as { productId: string; quantity: number }[] || [];
-                const productsInfo: { name: string; quantity: number; price: number, isDigital: boolean, link?: string }[] = [];
-
-                for (const item of items) {
-                    const product = await this.productsRepository.findOne({ where: { id: item.productId }, relations: ['prices'] });
-                    if (product) {
-                        const price = product.prices.find(p => p.currency === 'CLP')?.amount || 0;
-                        const isDigital = ['pdf', 'digital_file', 'video', 'ebook', 'template'].includes(product.productType);
-                        const productLink = product.fileUrl || (product.metadata as any)?.link;
-
-                        productsInfo.push({
-                            name: product.name,
-                            quantity: item.quantity,
-                            price: Number(price),
-                            isDigital: isDigital,
-                            link: productLink
-                        });
-                    }
-                }
-
-                // Generar Boleta Lioren
-                let boletaAttachments: any[] = [];
-                try {
-                    const userRut = order.metadata?.userRut || this.configService.get<string>('LIOREN_DEFAULT_RUT') || '111111111';
-
-                    const boletaResult = await this.liorenService.generarBoletaCompra(
-                        {
-                            rut: userRut,
-                            nombre: order.user?.name || 'Cliente',
-                            email: order.billingEmail,
-                            comuna: order.metadata?.comuna || 1,
-                            ciudad: order.metadata?.ciudad || 1,
-                        },
-                        productsInfo.map(p => ({
-                            nombre: p.name,
-                            cantidad: p.quantity,
-                            precio: p.price,
-                            exento: p.isDigital
-                        })),
-                        {
-                            fechaPago: order.paidAt || new Date(),
-                            referencia: order.orderNumber,
-                        }
-                    );
-
-                    if (boletaResult && boletaResult.pdf) {
-                        boletaAttachments.push({
-                            filename: `boleta_${order.orderNumber}.pdf`,
-                            content: boletaResult.pdf,
-                        });
-                    }
-                } catch (liorenError) {
-                    console.error("Error generating Lioren boleta for market order (PayPal):", liorenError);
-                }
-
-                // Enviar correos
-                for (const p of productsInfo) {
-                    if (p.link) {
-                        await this.marketingService.sendDigitalProductEmail(
-                            order.billingEmail,
-                            order.user?.name || 'Cliente',
-                            p.name,
-                            p.link,
-                            order.orderNumber,
-                            boletaAttachments
-                        );
-                    }
-                }
-
-                await this.marketingService.sendPurchaseConfirmationEmail(
-                    order.billingEmail,
-                    order.user?.name || 'Cliente',
-                    order.orderNumber,
-                    productsInfo.map(p => ({ name: p.name, quantity: p.quantity, price: p.price })),
-                    Number(order.total),
-                    boletaAttachments
-                );
-
-            } catch (error) {
-                console.error("Error processing emails after PayPal success:", error);
-            }
+            await this.completeOrderAndSendEmails(order, orderId);
         } else {
             order.status = OrderStatus.FAILED;
             await this.ordersRepository.save(order);

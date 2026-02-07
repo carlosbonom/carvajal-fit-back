@@ -709,10 +709,14 @@ export class MarketingService implements OnModuleInit {
       };
 
       if (attachments && attachments.length > 0) {
-        emailOptions.attachments = attachments.map(att => ({
-          filename: att.filename,
-          content: att.content,
-        }));
+        console.log(`[MarketingService] Adding ${attachments.length} attachments to digital product email for ${email}`);
+        emailOptions.attachments = attachments.map(att => {
+          console.log(`[MarketingService] Attachment: ${att.filename} (${att.content?.length || 0} bytes)`);
+          return {
+            filename: att.filename,
+            content: att.content,
+          };
+        });
       }
 
       await this.resend.emails.send(emailOptions);
