@@ -21,7 +21,7 @@ export class ProductsService {
     private readonly productPriceRepository: Repository<ProductPrice>,
     @InjectRepository(Creator)
     private readonly creatorRepository: Repository<Creator>,
-  ) {}
+  ) { }
 
   private mapToResponseDto(product: Product): ProductResponseDto {
     return {
@@ -31,6 +31,7 @@ export class ProductsService {
       description: product.description,
       productType: product.productType,
       fileUrl: product.fileUrl,
+      fileUrls: product.fileUrls,
       thumbnailUrl: product.thumbnailUrl,
       bannerUrl: product.bannerUrl,
       isActive: product.isActive,
@@ -134,6 +135,7 @@ export class ProductsService {
       productType: createProductDto.productType,
       creator: creator,
       fileUrl: createProductDto.fileUrl,
+      fileUrls: createProductDto.fileUrls,
       thumbnailUrl: createProductDto.thumbnailUrl,
       bannerUrl: createProductDto.bannerUrl,
       isActive: createProductDto.isActive ?? true,
@@ -192,6 +194,7 @@ export class ProductsService {
       description: updateProductDto.description ?? product.description,
       productType: updateProductDto.productType ?? product.productType,
       fileUrl: updateProductDto.fileUrl ?? product.fileUrl,
+      fileUrls: updateProductDto.fileUrls ?? product.fileUrls,
       thumbnailUrl: updateProductDto.thumbnailUrl ?? product.thumbnailUrl,
       bannerUrl: updateProductDto.bannerUrl ?? product.bannerUrl,
       isActive: updateProductDto.isActive ?? product.isActive,

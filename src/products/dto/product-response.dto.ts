@@ -22,6 +22,7 @@ export class ProductResponseDto {
   description?: string;
   productType: ProductType;
   fileUrl?: string;
+  fileUrls?: string[];
   thumbnailUrl?: string;
   bannerUrl?: string;
   isActive: boolean;

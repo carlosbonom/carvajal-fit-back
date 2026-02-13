@@ -69,6 +69,11 @@ export class UpdateProductDto {
   isActive?: boolean;
 
   @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  fileUrls?: string[];
+
+  @IsOptional()
   metadata?: Record<string, any>;
 }
 

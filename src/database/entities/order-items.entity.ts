@@ -45,6 +45,9 @@ export class OrderItem {
   @Column({ type: 'varchar', length: 500, nullable: true, name: 'file_url' })
   fileUrl: string;
 
+  @Column({ type: 'jsonb', nullable: true, name: 'file_urls' })
+  fileUrls: string[];
+
   @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
   createdAt: Date;
 }

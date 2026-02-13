@@ -647,7 +647,7 @@ export class MarketingService implements OnModuleInit {
     email: string,
     userName: string,
     productName: string,
-    productLink: string,
+    productLinks: string[],
     orderNumber: string,
     attachments?: Array<{ filename: string; content: Buffer; contentType?: string }>,
   ): Promise<void> {
@@ -682,13 +682,17 @@ export class MarketingService implements OnModuleInit {
             <td style="padding: 40px 30px;">
               <h2 style="color: #333; margin-top: 0;">Hola ${userName},</h2>
               <p style="color: #666; font-size: 16px; line-height: 1.6;">
-                Gracias por tu compra. Aquí tienes el acceso a tu producto digital <strong>${productName}</strong>.
+                Gracias por tu compra. Aquí tienes el acceso a tu contenido digital para <strong>${productName}</strong>.
               </p>
               
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="${productLink}" style="background-color: #00b2de; color: #ffffff; text-decoration: none; padding: 15px 30px; border-radius: 6px; font-weight: bold; font-size: 16px;">
-                  Acceder al Contenido
-                </a>
+              <div style="margin: 30px 0;">
+                ${productLinks.map((link, index) => `
+                  <div style="text-align: center; margin-bottom: 15px;">
+                    <a href="${link}" style="display: inline-block; background-color: #00b2de; color: #ffffff; text-decoration: none; padding: 15px 30px; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                      Descargar Archivo ${productLinks.length > 1 ? index + 1 : ''}
+                    </a>
+                  </div>
+                `).join('')}
               </div>
 
               <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px; border-left: 4px solid #00b2de;">
@@ -989,6 +993,79 @@ export class MarketingService implements OnModuleInit {
       console.log(`Email de pago fallido enviado a ${email}`);
     } catch (error) {
       console.error(`Error enviando email de pago fallido a ${email}:`, error);
+    }
+  }
+
+  /**
+   * Envía notificación de suscripción cancelada
+   */
+  async sendSubscriptionCancelledEmail(
+    email: string,
+    userName: string,
+    planName: string,
+  ): Promise<void> {
+    if (!this.resend) return;
+
+    const fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL') || 'noreply@carvajalfit.com';
+    const fromName = this.configService.get<string>('RESEND_FROM_NAME') || 'Club Carvajal Fit';
+
+    try {
+      await this.resend.emails.send({
+        from: `${fromName} <${fromEmail}>`,
+        to: email,
+        subject: `Suscripción Cancelada - Club Carvajal Fit 😔`,
+        html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Suscripción Cancelada</title>
+</head>
+<body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding: 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="background: linear-gradient(135deg, #6b7280 0%, #374151 100%); padding: 40px 20px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 28px;">Tu suscripción ha sido cancelada</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px 30px;">
+              <h2 style="color: #333; margin-top: 0;">Hola ${userName},</h2>
+              <p style="color: #666; font-size: 16px; line-height: 1.6;">
+                Te confirmamos que tu suscripción al plan <strong>${planName}</strong> ha sido cancelada exitosamente.
+              </p>
+              
+              <p style="color: #666; font-size: 16px; line-height: 1.6;">
+                Lamentamos verte partir, pero recuerda que siempre serás bienvenido de vuelta cuando decidas retomar tus objetivos. 
+                Podrás seguir accediendo al contenido del club hasta que termine tu periodo de facturación actual.
+              </p>
+
+              <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 30px 0; text-align: center;">
+                <p style="margin: 0; color: #4b5563; font-size: 14px;">
+                  Si cambias de opinión, puedes volver a suscribirte en cualquier momento desde nuestra web.
+                </p>
+              </div>
+
+              <p style="color: #999; font-size: 14px; text-align: center;">
+                ¡Gracias por haber sido parte del club! <br>
+                El equipo de Club Carvajal Fit
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+        `
+      });
+      console.log(`Email de suscripción cancelada enviado a ${email}`);
+    } catch (error) {
+      console.error(`Error enviando email de suscripción cancelada a ${email}:`, error);
     }
   }
 }

@@ -78,6 +78,9 @@ export class Product {
   @Column({ type: 'boolean', default: true, nullable: false, name: 'is_active' })
   isActive: boolean;
 
+  @Column({ type: 'jsonb', nullable: true, name: 'file_urls' })
+  fileUrls: string[];
+
   @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, any>;
 

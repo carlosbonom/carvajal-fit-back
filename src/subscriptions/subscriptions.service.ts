@@ -925,30 +925,72 @@ export class SubscriptionsService {
         user: { id: userId },
         status: SubscriptionStatus.ACTIVE,
       },
-      relations: ['plan', 'billingCycle'],
+      relations: ['plan', 'billingCycle', 'user'],
     });
 
     if (!subscription) {
       throw new NotFoundException('No se encontró una suscripción activa para cancelar');
     }
 
-    // Cancelar en Mercado Pago si tiene ID
-    if (subscription.mercadoPagoSubscriptionId) {
-      try {
-        await this.mercadoPagoService.cancelSubscription(subscription.mercadoPagoSubscriptionId);
-      } catch (error) {
-        console.error('Error cancelando suscripción en Mercado Pago:', error);
-        // Continuar con la cancelación local aunque falle en MP
+    const userEmail = subscription.user.email;
+    const userName = subscription.user.name || 'Miembro';
+    const planName = subscription.plan.name;
+
+    // Sanitizar email (quitar el alias + si existe) para la búsqueda en MP
+    let sanitizedEmailForSearch = userEmail;
+    if (userEmail.includes('+') && userEmail.includes('@')) {
+      const [localPart, domainPart] = userEmail.split('@');
+      const [realLocalPart] = localPart.split('+');
+      sanitizedEmailForSearch = `${realLocalPart}@${domainPart}`;
+    }
+
+    // Buscar y cancelar TODAS las suscripciones en Mercado Pago asociadas al email que no estén ya canceladas
+    try {
+      const searchResults = await this.mercadoPagoService.searchSubscriptions({
+        payer_email: sanitizedEmailForSearch,
+        // No filtramos por status para obtener todo (authorized, pending, paused, etc)
+      });
+
+      if (searchResults && searchResults.results && searchResults.results.length > 0) {
+        // Filtrar solo las que NO están canceladas
+        const activeSubscriptions = searchResults.results.filter((s: any) => s.status !== 'cancelled');
+
+        if (activeSubscriptions.length > 0) {
+          console.log(`Cancelando ${activeSubscriptions.length} suscripciones (no canceladas) en Mercado Pago para ${userEmail}`);
+          for (const mpSub of activeSubscriptions) {
+            try {
+              await this.mercadoPagoService.cancelSubscription(mpSub.id);
+            } catch (error) {
+              console.error(`Error cancelando suscripción ${mpSub.id} en Mercado Pago:`, error);
+            }
+          }
+        }
+      } else if (subscription.mercadoPagoSubscriptionId) {
+        // Fallback: si no se encontró por búsqueda pero tenemos el ID guardado
+        try {
+          await this.mercadoPagoService.cancelSubscription(subscription.mercadoPagoSubscriptionId);
+        } catch (error) {
+          console.error('Error cancelando suscripción guardada en Mercado Pago:', error);
+        }
       }
+    } catch (error) {
+      console.error('Error buscando suscripciones en Mercado Pago para cancelar:', error);
     }
 
     // Actualizar estado local
     subscription.status = SubscriptionStatus.CANCELLED;
     subscription.cancelledAt = new Date();
-    subscription.cancellationReason = cancelDto.reason || null;
+    subscription.cancellationReason = cancelDto.reason || 'Cancelado por el usuario';
     subscription.autoRenew = false;
 
     await this.userSubscriptionRepository.save(subscription);
+
+    // Enviar email de cancelación
+    await this.marketingService.sendSubscriptionCancelledEmail(
+      userEmail,
+      userName,
+      planName,
+    );
 
     // Obtener precios para la respuesta
     const prices = await this.subscriptionPriceRepository

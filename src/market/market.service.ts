@@ -87,15 +87,26 @@ export class MarketService {
                 if (product) {
                     const price = product.prices.find(p => p.currency === 'CLP')?.amount || 0;
                     const isDigital = ['pdf', 'digital_file', 'video', 'ebook', 'template'].includes(product.productType);
-                    const productLink = product.fileUrl || (product.metadata as any)?.link;
+
+                    // Collect all links: from fileUrls array and fallback to single fileUrl
+                    const productLinks: string[] = [];
+                    if (product.fileUrls && Array.isArray(product.fileUrls)) {
+                        productLinks.push(...product.fileUrls);
+                    }
+                    if (product.fileUrl && !productLinks.includes(product.fileUrl)) {
+                        productLinks.push(product.fileUrl);
+                    }
+                    if ((product.metadata as any)?.link && !productLinks.includes((product.metadata as any).link)) {
+                        productLinks.push((product.metadata as any).link);
+                    }
 
                     productsInfo.push({
                         name: product.name,
                         quantity: item.quantity,
                         price: Number(price),
                         isDigital: isDigital,
-                        link: productLink
-                    });
+                        links: productLinks
+                    } as any);
                 }
             }
 
@@ -117,7 +128,7 @@ export class MarketService {
                         nombre: p.name,
                         cantidad: p.quantity,
                         precio: p.price,
-                        exento: p.isDigital
+                        exento: (p as any).isDigital
                     })),
                     {
                         fechaPago: order.paidAt || new Date(),
@@ -139,13 +150,22 @@ export class MarketService {
             }
 
             // Enviar correos de productos digitales
-            for (const p of productsInfo) {
-                if (p.link) {
+            for (const p of productsInfo as any[]) {
+                if (p.links && p.links.length > 0) {
                     await this.marketingService.sendDigitalProductEmail(
                         order.billingEmail,
                         order.user?.name || 'Cliente',
                         p.name,
-                        p.link,
+                        p.links,
+                        order.orderNumber,
+                        boletaAttachments
+                    );
+                } else if ((p as any).link) { // Fallback for old structure if needed although we added to links above
+                    await this.marketingService.sendDigitalProductEmail(
+                        order.billingEmail,
+                        order.user?.name || 'Cliente',
+                        p.name,
+                        [(p as any).link],
                         order.orderNumber,
                         boletaAttachments
                     );
