@@ -8,6 +8,7 @@ import { LiorenModule } from '../lioren/lioren.module';
 import { Order } from '../database/entities/orders.entity';
 import { Product } from '../database/entities/products.entity';
 import { User } from '../database/entities/users.entity';
+import { DashboardModule } from '../dashboard/dashboard.module';
 
 @Module({
     imports: [
@@ -19,6 +20,7 @@ import { User } from '../database/entities/users.entity';
         PaymentsModule,
         MarketingModule,
         LiorenModule,
+        DashboardModule,
     ],
     controllers: [MarketController],
     providers: [MarketService],

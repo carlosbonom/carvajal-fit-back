@@ -7,10 +7,15 @@ async function bootstrap() {
 
   // Configurar CORS
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || true, // Permitir todos los orígenes en desarrollo, o especificar uno en producción
-    credentials: true, // Permitir cookies y headers de autenticación
+    origin: [
+      'http://localhost:3000',
+      'https://carvajalfit.com',
+      'https://www.carvajalfit.com',
+      process.env.CORS_ORIGIN
+    ].filter(Boolean),
+    credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
   });
 
   // Habilitar validación global con class-validator

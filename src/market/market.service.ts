@@ -10,6 +10,7 @@ import { MercadoPagoCheckoutService } from '../payments/mercado-pago-checkout.se
 import { PayPalService, PayPalCredentials } from '../payments/paypal.service';
 import { MarketingService } from '../marketing/marketing.service';
 import { LiorenService } from '../lioren/lioren.service';
+import { DashboardGateway } from '../dashboard/dashboard.gateway';
 
 @Injectable()
 export class MarketService {
@@ -25,7 +26,8 @@ export class MarketService {
         private mercadoPagoService: MercadoPagoCheckoutService,
         private payPalService: PayPalService,
         private marketingService: MarketingService, // Injected
-        private liorenService: LiorenService
+        private liorenService: LiorenService,
+        private dashboardGateway: DashboardGateway,
     ) { }
 
     private getCreatorCredentials(creatorSlug: string) {

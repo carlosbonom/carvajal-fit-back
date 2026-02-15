@@ -18,6 +18,7 @@ import { Content } from '../database/entities/content.entity';
 import { PasswordResetCode } from '../database/entities/password-reset-code.entity';
 import { SubscriptionsReminderService } from './subscriptions-reminder.service';
 import { MarketModule } from '../market/market.module';
+import { DashboardModule } from '../dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { MarketModule } from '../market/market.module';
     LiorenModule,
     PaymentsModule,
     MarketModule,
+    DashboardModule,
   ],
   controllers: [SubscriptionsController],
   providers: [SubscriptionsService, MercadoPagoService, SubscriptionsReminderService],

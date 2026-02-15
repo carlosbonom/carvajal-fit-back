@@ -18,6 +18,7 @@ import { CommentsModule } from './comments/comments.module';
 import { UserProgressModule } from './user-progress/user-progress.module';
 import { CourseCategoriesModule } from './course-categories/course-categories.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -41,7 +42,8 @@ import { ScheduleModule } from '@nestjs/schedule';
     ClubConfigModule,
     CommentsModule,
     UserProgressModule,
-    CourseCategoriesModule
+    CourseCategoriesModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],

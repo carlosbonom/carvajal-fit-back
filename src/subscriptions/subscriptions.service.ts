@@ -32,6 +32,8 @@ import { LiorenService } from '../lioren/lioren.service';
 import { ConfigService } from '@nestjs/config';
 import { PasswordResetCode } from '../database/entities/password-reset-code.entity';
 import { UpdateMemberDto } from './dto/update-member.dto';
+import { CreateMemberDto } from './dto/create-member.dto';
+import { DashboardGateway } from '../dashboard/dashboard.gateway';
 
 @Injectable()
 export class SubscriptionsService {
@@ -62,6 +64,7 @@ export class SubscriptionsService {
     private readonly liorenService: LiorenService,
     private readonly marketService: MarketService,
     private readonly configService: ConfigService,
+    private readonly dashboardGateway: DashboardGateway,
   ) { }
 
   async getAvailablePlans(): Promise<SubscriptionPlanDto[]> {
@@ -324,6 +327,8 @@ export class SubscriptionsService {
 
       await this.userSubscriptionRepository.save(savedSubscription);
 
+      this.dashboardGateway.emitDashboardUpdate();
+
       return {
         id: savedSubscription.id,
         status: savedSubscription.status,
@@ -569,6 +574,8 @@ export class SubscriptionsService {
                   subscription.currentPeriodEnd,
                   attachments,
                 );
+
+                this.dashboardGateway.emitDashboardUpdate();
               } else if (['rejected', 'cancelled', 'charged_back'].includes(mpPayment.status)) {
                 // Enviar email de fallo
                 const appUrl = this.configService.get<string>('APP_URL') || 'https://carvajalfit.com';
@@ -630,6 +637,8 @@ export class SubscriptionsService {
                   subscription.currentPeriodEnd,
                   attachments,
                 );
+
+                this.dashboardGateway.emitDashboardUpdate();
               }
               // Detectar cambio a Fallido
               else if (previousStatus !== PaymentStatus.FAILED && paymentRecord.status === PaymentStatus.FAILED) {
@@ -1275,6 +1284,101 @@ export class SubscriptionsService {
     }
 
     return { message: 'Miembro actualizado correctamente' };
+  }
+
+  async createMember(createDto: CreateMemberDto): Promise<any> {
+    // 1. Verificar si el usuario ya existe
+    let user = await this.userRepository.findOne({ where: { email: createDto.email } });
+
+    if (user) {
+      throw new BadRequestException('El usuario ya existe');
+    }
+
+    // 2. Crear usuario
+    const password = createDto.password || Math.random().toString(36).slice(-8);
+    const SALT_ROUNDS = 10;
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+
+    user = this.userRepository.create({
+      name: createDto.name,
+      email: createDto.email,
+      passwordHash,
+      role: UserRole.CUSTOMER,
+      status: createDto.status || UserStatus.ACTIVE,
+    });
+
+    user = await this.userRepository.save(user);
+
+    // 3. Crear Suscripción
+    // Obtener plan por defecto si no se especifica
+    let plan: SubscriptionPlan | null = null;
+    if (createDto.planId) {
+      plan = await this.subscriptionPlanRepository.findOne({ where: { id: createDto.planId } });
+    } else {
+      plan = await this.subscriptionPlanRepository.findOne({
+        where: { isActive: true },
+        order: { sortOrder: 'ASC' },
+      });
+    }
+
+    if (!plan) {
+      throw new BadRequestException('No se encontró un plan válido');
+    }
+
+    // Obtener ciclo de facturación por defecto si no se especifica
+    let billingCycle: BillingCycle | null = null;
+    if (createDto.billingCycleId) {
+      billingCycle = await this.billingCycleRepository.findOne({ where: { id: createDto.billingCycleId } });
+    } else {
+      billingCycle = await this.billingCycleRepository.findOne({ where: { slug: 'mensual' } });
+    }
+
+    if (!billingCycle) {
+      throw new BadRequestException('No se encontró un ciclo de facturación válido');
+    }
+
+    const startedAt = createDto.startedAt ? new Date(createDto.startedAt) : new Date();
+    const currentPeriodStart = startedAt;
+
+    // Si no se especifica fecha de fin, usar una fecha muy lejana (2099)
+    let currentPeriodEnd: Date;
+    if (createDto.currentPeriodEnd) {
+      currentPeriodEnd = new Date(createDto.currentPeriodEnd);
+    } else {
+      // 2099-12-31
+      currentPeriodEnd = new Date('2099-12-31T23:59:59Z');
+    }
+
+    const subscription = this.userSubscriptionRepository.create({
+      user,
+      plan,
+      billingCycle,
+      status: createDto.subscriptionStatus || SubscriptionStatus.ACTIVE,
+      startedAt,
+      currentPeriodStart,
+      currentPeriodEnd,
+      autoRenew: createDto.autoRenew !== undefined ? createDto.autoRenew : false, // Manual subscriptions usually don't auto-renew via payment gateway automatically unless set up
+      metadata: {
+        createdManually: true,
+        createdByAdmin: true,
+        createdAt: new Date().toISOString(),
+      },
+    });
+
+    await this.userSubscriptionRepository.save(subscription);
+
+    return {
+      message: 'Miembro creado correctamente',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+      },
+      subscription: {
+        id: subscription.id,
+        status: subscription.status,
+      }
+    };
   }
 
   /**

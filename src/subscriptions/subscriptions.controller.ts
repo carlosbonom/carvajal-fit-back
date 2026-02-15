@@ -34,6 +34,7 @@ import { VerifyPayPalCaptureDto } from './dto/verify-paypal-capture.dto';
 import { CreateMercadoPagoCheckoutDto, ValidateMercadoPagoPaymentDto } from './dto/create-mercadopago-checkout.dto';
 import { MigrateSubscribersDto } from './dto/migrate-subscribers.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
+import { CreateMemberDto } from './dto/create-member.dto';
 
 import { SubscriptionsReminderService } from './subscriptions-reminder.service';
 
@@ -184,6 +185,15 @@ export class SubscriptionsController {
     @Body() updateDto: UpdateMemberDto,
   ) {
     return this.subscriptionsService.updateMember(id, updateDto);
+  }
+
+  @Post('members')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @HttpCode(HttpStatus.CREATED)
+  async createMember(
+    @Body() createDto: CreateMemberDto,
+  ) {
+    return this.subscriptionsService.createMember(createDto);
   }
 
   @Post('webpay/create')
