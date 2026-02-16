@@ -79,7 +79,7 @@ export class FileService {
           'Authorization': `Bearer ${this.cfApiToken}`,
         },
         chunkSize: 50 * 1024 * 1024, // 50MB
-        retryDelays: [0, 3000, 5000, 10000, 20000],
+        retryDelays: [0, 3000, 5000, 10000, 20000, 60000, 120000], // Extended retries for 429
         metadata: {
           filename: filePath.split('/').pop() || 'video.mp4',
           filetype: 'video/mp4',
