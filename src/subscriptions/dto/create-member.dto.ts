@@ -42,4 +42,8 @@ export class CreateMemberDto {
     @IsBoolean()
     @IsOptional()
     autoRenew?: boolean;
+
+    @IsString()
+    @IsOptional()
+    currency?: string;
 }

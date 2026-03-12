@@ -1305,6 +1305,7 @@ export class SubscriptionsService {
       passwordHash,
       role: UserRole.CUSTOMER,
       status: createDto.status || UserStatus.ACTIVE,
+      preferredCurrency: createDto.currency || 'CLP',
     });
 
     user = await this.userRepository.save(user);
